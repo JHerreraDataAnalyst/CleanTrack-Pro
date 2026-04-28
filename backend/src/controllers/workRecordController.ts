@@ -131,13 +131,135 @@ export const getDashboardData = async (req: Request, res: Response) => {
       return { workerId: worker.id, workerName: worker.name, status: 'green' };
     });
 
+    // 3. Análisis de Gasto Diario (últimos 7 días)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const recentVerifiedRecords = await prisma.workRecord.findMany({
+      where: {
+        isVerified: true,
+        assignment: {
+          date: { gte: sevenDaysAgo }
+        }
+      },
+      include: { assignment: true }
+    });
+
+    const dailyMap: { [key: string]: number } = {};
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      dailyMap[dateStr] = 0;
+    }
+
+    recentVerifiedRecords.forEach(record => {
+      const dateStr = record.assignment.date.toISOString().split('T')[0];
+      if (dailyMap[dateStr] !== undefined) {
+        dailyMap[dateStr] += (record.hours * 10);
+      }
+    });
+
+    const dailySpending = Object.entries(dailyMap).map(([fecha, monto]) => ({
+      fecha,
+      monto_total: monto
+    })).sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+    // 4. Acumulado Mensual por Empleado
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const monthlyRecords = await prisma.workRecord.findMany({
+      where: {
+        isVerified: true,
+        assignment: { date: { gte: startOfMonth } }
+      },
+      include: { assignment: true }
+    });
+
+    const spendingMap: { [key: string]: number } = {};
+    monthlyRecords.forEach(record => {
+      const workerId = record.assignment.workerId;
+      spendingMap[workerId] = (spendingMap[workerId] || 0) + (record.hours * 10);
+    });
+
+    const spendingByEmployee = workers.map(worker => ({
+      workerId: worker.id,
+      workerName: worker.name,
+      monthlyTotal: spendingMap[worker.id] || 0
+    }));
+
+    // Añadir el mensual al semáforo
+    const enhancedTrafficLight = trafficLight.filter(t => t.status !== 'gray').map(t => ({
+      ...t,
+      monthlyTotal: spendingMap[t.workerId] || 0
+    }));
+
     res.status(200).json({
       totalPayroll,
-      trafficLight: trafficLight.filter(t => t.status !== 'gray') // Solo mostramos a los que tienen turno hoy
+      dailySpending,
+      spendingByEmployee,
+      trafficLight: enhancedTrafficLight
     });
   } catch (error) {
     console.error('Error getDashboardData:', error);
     res.status(500).json({ error: 'Error al obtener datos del dashboard' });
+  }
+};
+
+// GET /api/work-records/my-history (TRABAJADOR)
+export const getMyHistory = async (req: Request, res: Response) => {
+  try {
+    const { workerId } = req.query;
+
+    if (!workerId) {
+      return res.status(400).json({ error: 'Falta workerId' });
+    }
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const verifiedRecords = await prisma.workRecord.findMany({
+      where: {
+        isVerified: true,
+        assignment: {
+          workerId: workerId as string,
+          date: { gte: startOfMonth }
+        }
+      },
+      include: {
+        room: true,
+        assignment: {
+          include: { address: true }
+        }
+      },
+      orderBy: {
+        assignment: { date: 'desc' }
+      }
+    });
+
+    const totalHours = verifiedRecords.reduce((sum, record) => sum + record.hours, 0);
+    const estimatedPay = totalHours * 10;
+
+    const formattedRecords = verifiedRecords.map(record => ({
+      id: record.id,
+      address: record.assignment.address.street,
+      room: record.room.name,
+      date: record.assignment.date,
+      hours: record.hours
+    }));
+
+    res.status(200).json({
+      totalHours,
+      estimatedPay,
+      records: formattedRecords
+    });
+  } catch (error) {
+    console.error('Error getMyHistory:', error);
+    res.status(500).json({ error: 'Error al obtener historial' });
   }
 };
 

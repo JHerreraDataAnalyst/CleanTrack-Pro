@@ -111,8 +111,8 @@ async function main() {
       for (let r = 0; r < numRoomsToClean; r++) {
         const room = shuffledRooms[r];
 
-        // 70% verificados, 30% no verificados
-        const isVerified = Math.random() < 0.7;
+        // Registros pasados siempre verificados para simular pagos, hoy pendientes o mixtos
+        const isVerified = dayOffset > 0 ? true : Math.random() < 0.5;
 
         // Asignar 4 u 8 horas
         const hours = Math.random() > 0.5 ? 8 : 4;

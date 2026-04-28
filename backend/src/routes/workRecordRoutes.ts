@@ -1,7 +1,10 @@
 import { Router } from 'express';
-import { logHours, verifyWorkRecord, getWorkRecords, getDashboardData } from '../controllers/workRecordController';
+import { logHours, verifyWorkRecord, getWorkRecords, getDashboardData, getMyHistory } from '../controllers/workRecordController';
 
 const router = Router();
+
+// Endpoint para el historial del trabajador
+router.get('/my-history', getMyHistory);
 
 // Endpoint para el dashboard de admin
 router.get('/dashboard', getDashboardData);

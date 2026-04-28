@@ -1,13 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useRootNavigationState } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
+  const navigationState = useRootNavigationState();
+
+  // Wait for navigation to be ready
+  useEffect(() => {
+    if (navigationState?.key && user) {
+      if (user.role === 'ADMIN') {
+        router.replace('/(tabs)/admin');
+      } else {
+        router.replace('/(tabs)/worker');
+      }
+    }
+  }, [navigationState?.key, user]);
 
   const handleLogin = async () => {
     if (!email) {
@@ -30,14 +42,9 @@ export default function LoginScreen() {
         throw new Error(data.error || 'Error al iniciar sesión');
       }
 
-      login(data.token, data.user);
+      await login(data.token, data.user);
 
-      // Redirigir según el rol
-      if (data.user.role === 'ADMIN') {
-        router.replace('/(tabs)/admin');
-      } else {
-        router.replace('/(tabs)/worker');
-      }
+      // Navigation will happen in the useEffect above
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -46,7 +53,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       className="flex-1 bg-brand-primary justify-center items-center p-6"
     >
@@ -63,7 +70,7 @@ export default function LoginScreen() {
         {/* Glassmorphism Card */}
         <View className="bg-white/95 p-8 rounded-3xl shadow-xl shadow-black/30 border border-white/20">
           <Text className="text-brand-dark font-semibold text-lg mb-6">Iniciar Sesión</Text>
-          
+
           <View className="mb-6">
             <Text className="text-gray-500 mb-2 font-medium text-sm">Correo Electrónico</Text>
             <TextInput

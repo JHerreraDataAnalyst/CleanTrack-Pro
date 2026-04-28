@@ -1,28 +1,32 @@
-import { Tabs, Redirect } from 'expo-router';
-import React from 'react';
+import { Tabs, useRouter, useSegments } from 'expo-router';
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '../../context/AuthContext';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const { user, isLoading } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
 
-  if (isLoading) {
+  useEffect(() => {
+    if (!isLoading) {
+      if (!user) {
+        // Redirect to login if not authenticated
+        router.replace('/');
+      }
+    }
+  }, [isLoading, user, router]);
+
+  // Don't render tabs while checking auth or if no user
+  if (isLoading || !user) {
     return (
       <View className="flex-1 justify-center items-center bg-brand-light">
         <ActivityIndicator size="large" color="#0066FF" />
       </View>
     );
-  }
-
-  // Redirigir al login si no hay usuario autenticado
-  if (!user) {
-    return <Redirect href="/" />;
   }
 
   return (
@@ -39,26 +43,26 @@ export default function TabLayout() {
           shadowRadius: 10,
         }
       }}>
-      
-      {/* Pestaña del Trabajador: Solo visible para trabajadores */}
-      <Tabs.Screen
-        name="worker"
-        options={{
-          title: 'Asignaciones',
-          href: user?.role === 'TRABAJADOR' ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet.clipboard" color={color} />,
-        }}
-      />
 
-      {/* Pestaña del Administrador: Solo visible para admins */}
-      <Tabs.Screen
-        name="admin"
-        options={{
-          title: 'Dashboard',
-          href: user?.role === 'ADMIN' ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
-        }}
-      />
+      {user?.role === 'TRABAJADOR' && (
+        <Tabs.Screen
+          name="worker"
+          options={{
+            title: 'Asignaciones',
+            tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet.clipboard" color={color} />,
+          }}
+        />
+      )}
+
+      {user?.role === 'ADMIN' && (
+        <Tabs.Screen
+          name="admin"
+          options={{
+            title: 'Dashboard',
+            tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
+          }}
+        />
+      )}
     </Tabs>
   );
 }

@@ -23,22 +23,25 @@ model User {
   email        String       @unique
   passwordHash String
   role         Role         @default(TRABAJADOR)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   assignments  Assignment[]
+  notifications Notification[]
 }
 
 model Address {
-  id          String       @id @default(uuid())
-  street      String
-  city        String
-  state       String?
-  zipCode     String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  rooms       Room[]
-  assignments Assignment[]
-  incidents   Incident[]
+  id           String       @id @default(uuid())
+  street       String
+  city         String
+  state        String?
+  zipCode      String?
+  instructions String?
+  contactPhone String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  rooms        Room[]
+  assignments  Assignment[]
+  incidents    Incident[]
 }
 
 model Room {
@@ -83,4 +86,14 @@ model Incident {
   address     Address  @relation(fields: [addressId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

@@ -22,6 +22,9 @@ const MAPPING = {
   'chart.bar.fill': 'dashboard',
   'clock.fill': 'access-time',
   'chart.line.uptrend.xyaxis': 'trending-up',
+  'bell.fill': 'notifications',
+  'map.fill': 'location-on',
+  'rectangle.portrait.and.arrow.right': 'logout'
 } as IconMapping;
 
 /**

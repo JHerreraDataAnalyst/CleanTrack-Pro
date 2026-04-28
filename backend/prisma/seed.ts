@@ -12,6 +12,7 @@ async function main() {
   console.log('Iniciando el script de Seeding...');
 
   // 1. Limpiar la base de datos para evitar duplicados si se ejecuta varias veces
+  await prisma.notification.deleteMany();
   await prisma.incident.deleteMany();
   await prisma.workRecord.deleteMany();
   await prisma.assignment.deleteMany();
@@ -54,6 +55,14 @@ async function main() {
     'Calle Mayor, 4',
     'Calle de Atocha, 120'
   ];
+  
+  const sampleInstructions = [
+    'Las llaves están en la conserjería. Preguntar por Juan.',
+    'Código de acceso a la puerta: 4829#',
+    'Limpieza profunda requerida en el salón principal.',
+    'Por favor, no usar lejía en los baños de mármol.',
+    'Llamar antes de llegar para abrir la barrera.'
+  ];
 
   for (let i = 0; i < 5; i++) {
     const address = await prisma.address.create({
@@ -62,6 +71,8 @@ async function main() {
         city: 'Madrid',
         state: 'Madrid',
         zipCode: `2800${i + 1}`,
+        instructions: sampleInstructions[i],
+        contactPhone: `+34 600 123 45${i}`,
         rooms: {
           create: [
             { name: 'Salón Principal' },
@@ -104,7 +115,6 @@ async function main() {
       totalAssignments++;
 
       // Crear WorkRecord para una o más habitaciones de esa dirección
-      // Elegimos una cantidad aleatoria de habitaciones (entre 1 y 3)
       const numRoomsToClean = Math.floor(Math.random() * 3) + 1;
       const shuffledRooms = [...randomAddress.rooms].sort(() => 0.5 - Math.random());
 
@@ -113,8 +123,6 @@ async function main() {
 
         // Registros pasados siempre verificados para simular pagos, hoy pendientes o mixtos
         const isVerified = dayOffset > 0 ? true : Math.random() < 0.5;
-
-        // Asignar 4 u 8 horas
         const hours = Math.random() > 0.5 ? 8 : 4;
 
         await prisma.workRecord.create({
@@ -135,7 +143,7 @@ async function main() {
   await prisma.incident.create({
     data: {
       description: 'Fuga de agua en el Baño Principal. Requiere fontanero urgente para evitar daños en la madera.',
-      photoUrl: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg', // Ejemplo
+      photoUrl: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg',
       addressId: addresses[0].id,
     },
   });
@@ -148,6 +156,31 @@ async function main() {
     },
   });
   console.log(`- Creadas 2 incidencias con descripciones realistas.`);
+  
+  // 7. Generar notificaciones de prueba para todos los trabajadores
+  for (const worker of workers) {
+    await prisma.notification.create({
+      data: {
+        userId: worker.id,
+        title: '¡Bienvenido a CleanTrack Pro!',
+        message: 'Revisa tus asignaciones de hoy en el nuevo panel de sedes.',
+        isRead: false
+      }
+    });
+    
+    // Solo un 30% tienen notificaciones adicionales
+    if (Math.random() > 0.7) {
+      await prisma.notification.create({
+        data: {
+          userId: worker.id,
+          title: 'Cambio de turno',
+          message: 'Se ha modificado el horario de limpieza para la oficina de Gran Vía.',
+          isRead: true
+        }
+      });
+    }
+  }
+  console.log(`- Creadas notificaciones iniciales para los trabajadores.`);
 
   console.log('¡Seeding de la base de datos completado exitosamente!');
 }

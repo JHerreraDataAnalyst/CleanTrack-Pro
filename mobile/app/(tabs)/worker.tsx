@@ -2,6 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Calendar, LocaleConfig } from 'react-native-calendars';
+
+LocaleConfig.locales['es'] = {
+  monthNames: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
+  monthNamesShort: ['Ene.', 'Feb.', 'Mar.', 'Abr.', 'May.', 'Jun.', 'Jul.', 'Ago.', 'Sep.', 'Oct.', 'Nov.', 'Dic.'],
+  dayNames: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'],
+  dayNamesShort: ['Dom.', 'Lun.', 'Mar.', 'Mié.', 'Jue.', 'Vie.', 'Sáb.'],
+  today: 'Hoy'
+};
+LocaleConfig.defaultLocale = 'es';
 
 export default function DailyAssignmentsScreen() {
   const [viewMode, setViewMode] = useState<'tareas' | 'acumulado'>('tareas');
@@ -14,6 +24,7 @@ export default function DailyAssignmentsScreen() {
   
   // Estado para Acumulado
   const [historyData, setHistoryData] = useState<{ totalHours: number, estimatedPay: number, records: any[] } | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -197,29 +208,60 @@ export default function DailyAssignmentsScreen() {
                   </View>
                 </View>
 
-                <Text className="text-xl font-bold text-brand-dark mb-4">Historial de Trabajos</Text>
-                <View className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-8">
-                  {historyData.records.length === 0 ? (
-                    <View className="p-6 items-center">
-                      <Text className="text-gray-500">Aún no hay registros confirmados este mes.</Text>
-                    </View>
-                  ) : (
-                    historyData.records.map((record, index) => (
-                      <View 
-                        key={record.id} 
-                        className={`p-4 flex-row justify-between items-center ${index !== historyData.records.length - 1 ? 'border-b border-gray-100' : ''}`}
-                      >
-                        <View>
-                          <Text className="font-bold text-brand-dark">{record.address}</Text>
-                          <Text className="text-gray-500 text-sm mt-1">{new Date(record.date).toLocaleDateString()}</Text>
-                        </View>
-                        <View className="bg-green-50 px-3 py-1 rounded-full border border-green-100">
-                          <Text className="text-green-700 font-bold">+{record.hours}h</Text>
-                        </View>
-                      </View>
-                    ))
-                  )}
+                <Text className="text-xl font-bold text-brand-dark mb-4">Calendario de Trabajo</Text>
+                <View className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+                  <Calendar
+                    current={new Date().toISOString().split('T')[0]}
+                    markedDates={historyData.records.reduce((acc: any, record: any) => {
+                      const dateStr = new Date(record.date).toISOString().split('T')[0];
+                      acc[dateStr] = {
+                        marked: true,
+                        dotColor: record.isVerified ? '#10B981' : '#F59E0B',
+                        selected: selectedDate === dateStr,
+                        selectedColor: '#0066FF'
+                      };
+                      return acc;
+                    }, {})}
+                    onDayPress={(day: any) => setSelectedDate(day.dateString)}
+                    theme={{
+                      todayTextColor: '#0066FF',
+                      arrowColor: '#0066FF',
+                      textDayFontWeight: '500',
+                      textMonthFontWeight: 'bold',
+                      textDayHeaderFontWeight: '600'
+                    }}
+                  />
                 </View>
+
+                {selectedDate && (
+                  <View className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 mb-8">
+                    <Text className="text-lg font-bold text-brand-dark mb-3">
+                      Detalle del {new Date(selectedDate).toLocaleDateString()}
+                    </Text>
+                    {historyData.records.filter(r => new Date(r.date).toISOString().split('T')[0] === selectedDate).length > 0 ? (
+                      historyData.records
+                        .filter(r => new Date(r.date).toISOString().split('T')[0] === selectedDate)
+                        .map((record, index) => (
+                          <View key={record.id} className={`flex-row justify-between items-center ${index > 0 ? 'border-t border-gray-100 mt-3 pt-3' : ''}`}>
+                            <View>
+                              <Text className="font-bold text-brand-dark">{record.address}</Text>
+                              <Text className="text-gray-500 mt-1">Habitación: {record.room}</Text>
+                            </View>
+                            <View className="items-end">
+                              <View className={`px-3 py-1 rounded-full border ${record.isVerified ? 'bg-green-50 border-green-100' : 'bg-yellow-50 border-yellow-100'}`}>
+                                <Text className={`font-bold ${record.isVerified ? 'text-green-700' : 'text-yellow-700'}`}>
+                                  {record.hours}h {record.isVerified ? '✅' : '⏳'}
+                                </Text>
+                              </View>
+                              <Text className="font-bold text-brand-primary mt-1">€{(record.hours * 10).toFixed(2)}</Text>
+                            </View>
+                          </View>
+                        ))
+                    ) : (
+                      <Text className="text-gray-500 text-center py-2">No hay registros para este día.</Text>
+                    )}
+                  </View>
+                )}
               </>
             ) : null}
           </>

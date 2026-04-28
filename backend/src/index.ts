@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import workRecordRoutes from './routes/workRecordRoutes';
 import authRoutes from './routes/authRoutes';
+import workerRoutes from './routes/workerRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 
 dotenv.config();
 
@@ -15,6 +17,8 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/work-records', workRecordRoutes);
+app.use('/api/workers', workerRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/', (req, res) => {
   res.send('Limpieza API is running');

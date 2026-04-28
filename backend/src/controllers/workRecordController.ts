@@ -222,9 +222,8 @@ export const getMyHistory = async (req: Request, res: Response) => {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const verifiedRecords = await prisma.workRecord.findMany({
+    const allRecords = await prisma.workRecord.findMany({
       where: {
-        isVerified: true,
         assignment: {
           workerId: workerId as string,
           date: { gte: startOfMonth }
@@ -241,15 +240,17 @@ export const getMyHistory = async (req: Request, res: Response) => {
       }
     });
 
+    const verifiedRecords = allRecords.filter(r => r.isVerified);
     const totalHours = verifiedRecords.reduce((sum, record) => sum + record.hours, 0);
     const estimatedPay = totalHours * 10;
 
-    const formattedRecords = verifiedRecords.map(record => ({
+    const formattedRecords = allRecords.map(record => ({
       id: record.id,
       address: record.assignment.address.street,
       room: record.room.name,
       date: record.assignment.date,
-      hours: record.hours
+      hours: record.hours,
+      isVerified: record.isVerified
     }));
 
     res.status(200).json({

@@ -1,7 +1,10 @@
 import { Router } from 'express';
-import { logHours, verifyWorkRecord } from '../controllers/workRecordController';
+import { logHours, verifyWorkRecord, getWorkRecords } from '../controllers/workRecordController';
 
 const router = Router();
+
+// Endpoint para obtener asignaciones/registros (Trabajador)
+router.get('/', getWorkRecords);
 
 // Endpoint para cargar horas (Trabajador)
 router.post('/', logHours);

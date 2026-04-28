@@ -1,7 +1,39 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 
-const prisma = new PrismaClient();
+export const getWorkRecords = async (req: Request, res: Response) => {
+  try {
+    const workRecords = await prisma.workRecord.findMany({
+      include: {
+        room: true,
+        assignment: {
+          include: {
+            address: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 20 // Limit to recent 20 for the UI
+    });
+    
+    // Formatear para que el frontend lo consuma fácilmente
+    const formattedRecords = workRecords.map(record => ({
+      id: record.id,
+      address: record.assignment.address.street,
+      room: record.room.name,
+      date: record.assignment.date,
+      hours: record.hours,
+      isVerified: record.isVerified
+    }));
+
+    res.status(200).json(formattedRecords);
+  } catch (error) {
+    console.error('Error getWorkRecords:', error);
+    res.status(500).json({ error: 'Error al obtener registros' });
+  }
+};
 
 // POST /api/work-records
 export const logHours = async (req: Request, res: Response) => {
@@ -34,7 +66,7 @@ export const verifyWorkRecord = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     const workRecord = await prisma.workRecord.update({
-      where: { id },
+      where: { id: id as string },
       data: { isVerified: true },
     });
 

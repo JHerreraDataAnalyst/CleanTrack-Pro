@@ -1,17 +1,33 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
 
 export default function DailyAssignmentsScreen() {
   const [selectedAssignment, setSelectedAssignment] = useState<string | null>(null);
   const [hours, setHours] = useState('');
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data para las asignaciones del día
-  const assignments = [
-    { id: '1', address: '123 Main St, Springfield', room: 'Cocina', date: '2026-04-28' },
-    { id: '2', address: '456 Elm St, Springfield', room: 'Baño Principal', date: '2026-04-28' },
-  ];
+  // Usar la IP local obtenida para comunicarse con el backend en la misma red Wi-Fi
+  const API_URL = 'http://192.168.1.137:3000/api/work-records';
 
-  const handleConfirm = (id: string) => {
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const response = await fetch(API_URL);
+        const data = await response.json();
+        setAssignments(data);
+      } catch (error) {
+        console.error('Error fetching assignments:', error);
+        Alert.alert('Error', 'No se pudieron cargar las asignaciones');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAssignments();
+  }, []);
+
+  const handleConfirm = async (id: string) => {
     if (!hours) {
       Alert.alert('Error', 'Por favor ingresa las horas trabajadas');
       return;
@@ -31,7 +47,12 @@ export default function DailyAssignmentsScreen() {
         Asignaciones de Hoy
       </Text>
 
-      {assignments.map((task) => (
+      {loading ? (
+        <ActivityIndicator size="large" color="#0066FF" className="mt-10" />
+      ) : assignments.length === 0 ? (
+        <Text className="text-center text-gray-500 mt-10">No hay asignaciones para mostrar.</Text>
+      ) : (
+        assignments.map((task) => (
         <View key={task.id} className="bg-brand-white rounded-xl p-5 mb-4 shadow-sm border border-gray-100">
           <View className="flex-row justify-between items-start mb-2">
             <View>
@@ -77,7 +98,8 @@ export default function DailyAssignmentsScreen() {
             </TouchableOpacity>
           )}
         </View>
-      ))}
+        ))
+      )}
     </ScrollView>
   );
 }

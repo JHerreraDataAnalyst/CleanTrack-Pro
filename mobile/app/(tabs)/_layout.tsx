@@ -45,7 +45,7 @@ export default function TabLayout() {
         name="worker"
         options={{
           title: 'Asignaciones',
-          href: user.role === 'TRABAJADOR' ? '/worker' : null,
+          href: user?.role === 'TRABAJADOR' ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet.clipboard" color={color} />,
         }}
       />
@@ -55,7 +55,7 @@ export default function TabLayout() {
         name="admin"
         options={{
           title: 'Dashboard',
-          href: user.role === 'ADMIN' ? '/admin' : null,
+          href: user?.role === 'ADMIN' ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
         }}
       />

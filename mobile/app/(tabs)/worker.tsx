@@ -113,6 +113,14 @@ export default function DailyAssignmentsScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+          ) : task.isVerified ? (
+            <View className="mt-4 bg-green-50 p-3 rounded-lg border border-green-100 items-center">
+              <Text className="text-green-700 font-bold text-base">✅ Verificado ({task.hours}h)</Text>
+            </View>
+          ) : task.hasRecord ? (
+            <View className="mt-4 bg-yellow-50 p-3 rounded-lg border border-yellow-100 items-center">
+              <Text className="text-yellow-700 font-bold text-base">⏳ Pendiente de confirmación ({task.hours}h)</Text>
+            </View>
           ) : (
             <TouchableOpacity 
               className="mt-4 bg-brand-primary p-3 rounded-lg items-center shadow-sm"

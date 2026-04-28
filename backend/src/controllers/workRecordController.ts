@@ -7,7 +7,6 @@ export const getWorkRecords = async (req: Request, res: Response) => {
 
     const whereClause: any = {};
     
-    // Si se envía una fecha, filtrar asignaciones de ese día
     if (date) {
       const filterDate = new Date(date as string);
       const startOfDay = new Date(filterDate);
@@ -15,50 +14,63 @@ export const getWorkRecords = async (req: Request, res: Response) => {
       const endOfDay = new Date(filterDate);
       endOfDay.setHours(23, 59, 59, 999);
 
-      whereClause.assignment = {
-        date: {
-          gte: startOfDay,
-          lte: endOfDay
-        }
+      whereClause.date = {
+        gte: startOfDay,
+        lte: endOfDay
       };
     }
 
     if (workerId) {
-      whereClause.assignment = {
-        ...whereClause.assignment,
-        workerId: workerId as string
-      };
+      whereClause.workerId = workerId as string;
     }
 
-    const workRecords = await prisma.workRecord.findMany({
+    // Buscamos ASIGNACIONES (que es lo que el trabajador "tiene que hacer")
+    const assignments = await prisma.assignment.findMany({
       where: whereClause,
       include: {
-        room: true,
-        assignment: {
-          include: {
-            address: true,
-          }
-        }
+        address: true,
+        workRecords: {
+          include: { room: true }
+        },
       },
       orderBy: {
-        createdAt: 'desc'
-      },
-      take: 50
+        date: 'asc'
+      }
     });
     
-    const formattedRecords = workRecords.map(record => ({
-      id: record.id,
-      address: record.assignment.address.street,
-      room: record.room.name,
-      date: record.assignment.date,
-      hours: record.hours,
-      isVerified: record.isVerified
-    }));
+    // Formatear para que el frontend sepa si hay registros o no
+    const formatted = assignments.flatMap(asg => {
+      // Si no tiene registros, devolvemos un objeto base para que aparezca el botón "Registrar"
+      if (asg.workRecords.length === 0) {
+        return [{
+          id: `asg-${asg.id}`,
+          assignmentId: asg.id,
+          address: asg.address.street,
+          room: "General", // O podrías traer las habitaciones de la dirección
+          date: asg.date,
+          hours: 0,
+          isVerified: false,
+          hasRecord: false
+        }];
+      }
 
-    res.status(200).json(formattedRecords);
+      // Si tiene registros, los devolvemos
+      return asg.workRecords.map(record => ({
+        id: record.id,
+        assignmentId: asg.id,
+        address: asg.address.street,
+        room: record.room.name,
+        date: asg.date,
+        hours: record.hours,
+        isVerified: record.isVerified,
+        hasRecord: true
+      }));
+    });
+
+    res.status(200).json(formatted);
   } catch (error) {
     console.error('Error getWorkRecords:', error);
-    res.status(500).json({ error: 'Error al obtener registros' });
+    res.status(500).json({ error: 'Error al obtener asignaciones' });
   }
 };
 

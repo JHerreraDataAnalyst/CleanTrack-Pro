@@ -1,0 +1,17 @@
+# Configuración y Entornos
+.env
+.gemini/
+.vscode/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Mac/OS
+.DS_Store
+
+# Logs
+logs
+*.log

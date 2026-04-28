@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import workRecordRoutes from './routes/workRecordRoutes';
+import authRoutes from './routes/authRoutes';
 
 dotenv.config();
 
@@ -12,6 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/work-records', workRecordRoutes);
 
 app.get('/', (req, res) => {

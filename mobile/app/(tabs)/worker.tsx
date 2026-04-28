@@ -1,38 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
 
 export default function DailyAssignmentsScreen() {
   const [selectedAssignment, setSelectedAssignment] = useState<string | null>(null);
   const [hours, setHours] = useState('');
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDay, setSelectedDay] = useState<'hoy' | 'mañana'>('hoy');
+  const { user } = useAuth();
 
-  // Usar la IP local obtenida para comunicarse con el backend en la misma red Wi-Fi
   const API_URL = 'http://192.168.1.137:3000/api/work-records';
 
-  useEffect(() => {
-    const fetchAssignments = async () => {
-      try {
-        const response = await fetch(API_URL);
-        const data = await response.json();
-        setAssignments(data);
-      } catch (error) {
-        console.error('Error fetching assignments:', error);
-        Alert.alert('Error', 'No se pudieron cargar las asignaciones');
-      } finally {
-        setLoading(false);
+  const fetchAssignments = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const targetDate = new Date();
+      if (selectedDay === 'mañana') {
+        targetDate.setDate(targetDate.getDate() + 1);
       }
-    };
+      const dateString = targetDate.toISOString().split('T')[0];
+      
+      const response = await fetch(`${API_URL}?date=${dateString}&workerId=${user.id}`);
+      const data = await response.json();
+      setAssignments(data);
+    } catch (error) {
+      console.error('Error fetching assignments:', error);
+      Alert.alert('Error', 'No se pudieron cargar las asignaciones');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchAssignments();
-  }, []);
+  }, [selectedDay, user]);
 
   const handleConfirm = async (id: string) => {
     if (!hours) {
       Alert.alert('Error', 'Por favor ingresa las horas trabajadas');
       return;
     }
-    // Aquí iría el llamado a la API PATCH /api/work-records/:id/verify
     Alert.alert('Éxito', 'Horas verificadas y guardadas correctamente', [
       { text: 'OK', onPress: () => {
         setSelectedAssignment(null);
@@ -43,9 +52,27 @@ export default function DailyAssignmentsScreen() {
 
   return (
     <ScrollView className="flex-1 bg-brand-light p-4">
-      <Text className="text-2xl font-bold text-brand-dark mb-6 mt-4">
-        Asignaciones de Hoy
-      </Text>
+      <View className="mb-6 mt-4">
+        <Text className="text-2xl font-bold text-brand-dark mb-4">
+          Mis Asignaciones
+        </Text>
+        
+        {/* Selector de Días */}
+        <View className="flex-row bg-gray-200 rounded-xl p-1">
+          <TouchableOpacity 
+            className={`flex-1 py-2 items-center rounded-lg ${selectedDay === 'hoy' ? 'bg-white shadow-sm' : ''}`}
+            onPress={() => setSelectedDay('hoy')}
+          >
+            <Text className={`font-semibold ${selectedDay === 'hoy' ? 'text-brand-primary' : 'text-gray-500'}`}>Hoy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            className={`flex-1 py-2 items-center rounded-lg ${selectedDay === 'mañana' ? 'bg-white shadow-sm' : ''}`}
+            onPress={() => setSelectedDay('mañana')}
+          >
+            <Text className={`font-semibold ${selectedDay === 'mañana' ? 'text-brand-primary' : 'text-gray-500'}`}>Mañana</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {loading ? (
         <ActivityIndicator size="large" color="#0066FF" className="mt-10" />

@@ -425,6 +425,7 @@ export default function AdminDashboardScreen() {
           </View>
           
           <Agenda
+            key={`agenda-${selectedEmployee}`}
             items={items}
             loadItemsForMonth={loadItems}
             selected={AGENDA_START_DATE}

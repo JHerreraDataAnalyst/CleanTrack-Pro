@@ -77,84 +77,38 @@ export const getWorkRecords = async (req: Request, res: Response) => {
 // GET /api/work-records/dashboard (ADMIN)
 export const getDashboardData = async (req: Request, res: Response) => {
   try {
-    // 1. Gasto total acumulado (Horas verificadas * 10€)
-    const verifiedRecords = await prisma.workRecord.findMany({
-      where: { isVerified: true },
-      select: { hours: true }
-    });
-    const totalPayroll = verifiedRecords.reduce((sum, record) => sum + record.hours, 0) * 10;
+    const { month, year } = req.query;
+    
+    // Default to current month/year if not provided (month is 0-indexed in JS)
+    const targetYear = year ? parseInt(year as string, 10) : new Date().getFullYear();
+    const targetMonth = month ? parseInt(month as string, 10) : new Date().getMonth();
 
-    // 2. Semáforo de trabajadores para HOY
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+    const startOfMonth = new Date(targetYear, targetMonth, 1);
+    const endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
 
-    const workers = await prisma.user.findMany({
-      where: { role: 'TRABAJADOR' },
-      select: { id: true, name: true }
-    });
-
-    // Obtener asignaciones de hoy
-    const todayAssignments = await prisma.assignment.findMany({
-      where: {
-        date: { gte: startOfToday, lte: endOfToday }
-      },
-      include: {
-        workRecords: true
-      }
-    });
-
-    const trafficLight = workers.map(worker => {
-      const workerAssignments = todayAssignments.filter(a => a.workerId === worker.id);
-      
-      if (workerAssignments.length === 0) {
-        // No tiene asignaciones hoy
-        return { workerId: worker.id, workerName: worker.name, status: 'gray' };
-      }
-
-      // Tiene asignaciones, buscar si hay WorkRecords de hoy para esas asignaciones
-      const workerRecords = workerAssignments.flatMap(a => a.workRecords);
-
-      if (workerRecords.length === 0) {
-        // Tiene asignaciones pero no ha creado registros
-        return { workerId: worker.id, workerName: worker.name, status: 'red' };
-      }
-
-      // Hay registros, verificar si todos están confirmados o si hay alguno sin confirmar
-      const hasUnverified = workerRecords.some(r => r.isVerified === false);
-
-      if (hasUnverified) {
-        return { workerId: worker.id, workerName: worker.name, status: 'yellow' };
-      }
-
-      return { workerId: worker.id, workerName: worker.name, status: 'green' };
-    });
-
-    // 3. Análisis de Gasto Diario (últimos 7 días)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-
-    const recentVerifiedRecords = await prisma.workRecord.findMany({
+    // 1. Gasto total del mes seleccionado (Horas verificadas * 10€)
+    const monthlyVerifiedRecords = await prisma.workRecord.findMany({
       where: {
         isVerified: true,
         assignment: {
-          date: { gte: sevenDaysAgo }
+          date: { gte: startOfMonth, lte: endOfMonth }
         }
       },
       include: { assignment: true }
     });
+    
+    const totalPayroll = monthlyVerifiedRecords.reduce((sum, record) => sum + record.hours, 0) * 10;
 
+    // 2. Análisis de Gasto Diario (para todo el mes)
+    const numDays = endOfMonth.getDate();
     const dailyMap: { [key: string]: number } = {};
-    for (let i = 0; i < 7; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+    for (let i = 1; i <= numDays; i++) {
+      // Usamos UTC para evitar desfaces de zona horaria al aislar el YYYY-MM-DD
+      const dateStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       dailyMap[dateStr] = 0;
     }
 
-    recentVerifiedRecords.forEach(record => {
+    monthlyVerifiedRecords.forEach(record => {
       const dateStr = record.assignment.date.toISOString().split('T')[0];
       if (dailyMap[dateStr] !== undefined) {
         dailyMap[dateStr] += (record.hours * 10);
@@ -166,42 +120,44 @@ export const getDashboardData = async (req: Request, res: Response) => {
       monto_total: monto
     })).sort((a, b) => a.fecha.localeCompare(b.fecha));
 
-    // 4. Acumulado Mensual por Empleado
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-
-    const monthlyRecords = await prisma.workRecord.findMany({
-      where: {
-        isVerified: true,
-        assignment: { date: { gte: startOfMonth } }
-      },
-      include: { assignment: true }
+    // 3. Semáforo Mensual de trabajadores y Acumulado
+    const workers = await prisma.user.findMany({
+      where: { role: 'TRABAJADOR' },
+      select: { id: true, name: true }
     });
 
-    const spendingMap: { [key: string]: number } = {};
-    monthlyRecords.forEach(record => {
-      const workerId = record.assignment.workerId;
-      spendingMap[workerId] = (spendingMap[workerId] || 0) + (record.hours * 10);
+    const monthlyAssignments = await prisma.assignment.findMany({
+      where: { date: { gte: startOfMonth, lte: endOfMonth } },
+      include: { workRecords: true }
     });
 
-    const spendingByEmployee = workers.map(worker => ({
-      workerId: worker.id,
-      workerName: worker.name,
-      monthlyTotal: spendingMap[worker.id] || 0
-    }));
+    const trafficLight = workers.map(worker => {
+      const workerAssignments = monthlyAssignments.filter(a => a.workerId === worker.id);
+      
+      if (workerAssignments.length === 0) {
+        return { workerId: worker.id, workerName: worker.name, status: 'gray', monthlyTotal: 0 };
+      }
 
-    // Añadir el mensual al semáforo
-    const enhancedTrafficLight = trafficLight.filter(t => t.status !== 'gray').map(t => ({
-      ...t,
-      monthlyTotal: spendingMap[t.workerId] || 0
-    }));
+      const workerRecords = workerAssignments.flatMap(a => a.workRecords);
+      const monthlyTotal = workerRecords.filter(r => r.isVerified).reduce((sum, r) => sum + r.hours, 0) * 10;
+
+      if (workerRecords.length === 0) {
+        return { workerId: worker.id, workerName: worker.name, status: 'red', monthlyTotal };
+      }
+
+      const hasUnverified = workerRecords.some(r => r.isVerified === false);
+
+      if (hasUnverified) {
+        return { workerId: worker.id, workerName: worker.name, status: 'yellow', monthlyTotal };
+      }
+
+      return { workerId: worker.id, workerName: worker.name, status: 'green', monthlyTotal };
+    }).filter(t => t.status !== 'gray');
 
     res.status(200).json({
       totalPayroll,
       dailySpending,
-      spendingByEmployee,
-      trafficLight: enhancedTrafficLight
+      trafficLight
     });
   } catch (error) {
     console.error('Error getDashboardData:', error);

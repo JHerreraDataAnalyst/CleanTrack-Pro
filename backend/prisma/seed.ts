@@ -89,55 +89,64 @@ async function main() {
   }
   console.log(`- 5 direcciones creadas en Madrid con sus respectivas habitaciones.`);
 
-  // 5. Generar Asignaciones para los últimos 30 días para todos los trabajadores
+  // 5. Generar Asignaciones históricas desde el 1 de Enero de 2026 hasta hoy
   const today = new Date();
+  const startDate = new Date('2026-01-01T10:00:00.000Z'); // Evitar problemas de zona horaria
+  
   let totalAssignments = 0;
   let totalRecords = 0;
 
   for (const worker of workers) {
-    for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
-      // Ignorar algunos días aleatoriamente para simular descansos (20% de probabilidad)
-      if (Math.random() < 0.2) continue;
+    let currentDate = new Date(startDate);
+    
+    while (currentDate <= today) {
+      // Ignorar domingos (simular descanso) y aleatoriamente un 10% adicional
+      if (currentDate.getDay() !== 0 && Math.random() > 0.1) {
+        
+        const assignmentDate = new Date(currentDate);
 
-      const assignmentDate = new Date(today);
-      assignmentDate.setDate(today.getDate() - dayOffset);
+        // Asignar aleatoriamente 1 dirección
+        const randomAddress = addresses[Math.floor(Math.random() * addresses.length)];
 
-      // Asignar aleatoriamente 1 dirección por día a cada trabajador
-      const randomAddress = addresses[Math.floor(Math.random() * addresses.length)];
-
-      const assignment = await prisma.assignment.create({
-        data: {
-          workerId: worker.id,
-          addressId: randomAddress.id,
-          date: assignmentDate,
-        },
-      });
-      totalAssignments++;
-
-      // Crear WorkRecord para una o más habitaciones de esa dirección
-      const numRoomsToClean = Math.floor(Math.random() * 3) + 1;
-      const shuffledRooms = [...randomAddress.rooms].sort(() => 0.5 - Math.random());
-
-      for (let r = 0; r < numRoomsToClean; r++) {
-        const room = shuffledRooms[r];
-
-        // Registros pasados siempre verificados para simular pagos, hoy pendientes o mixtos
-        const isVerified = dayOffset > 0 ? true : Math.random() < 0.5;
-        const hours = Math.random() > 0.5 ? 8 : 4;
-
-        await prisma.workRecord.create({
+        const assignment = await prisma.assignment.create({
           data: {
-            assignmentId: assignment.id,
-            roomId: room.id,
-            hours: hours,
-            isVerified: isVerified,
+            workerId: worker.id,
+            addressId: randomAddress.id,
+            date: assignmentDate,
           },
         });
-        totalRecords++;
+        totalAssignments++;
+
+        // Crear WorkRecord para una o más habitaciones de esa dirección
+        const numRoomsToClean = Math.floor(Math.random() * 3) + 1;
+        const shuffledRooms = [...randomAddress.rooms].sort(() => 0.5 - Math.random());
+
+        for (let r = 0; r < numRoomsToClean; r++) {
+          const room = shuffledRooms[r];
+
+          // Registros pasados siempre verificados para simular pagos, hoy pendientes o mixtos
+          const isToday = assignmentDate.toDateString() === today.toDateString();
+          const isVerified = isToday ? Math.random() < 0.5 : true;
+          const hours = Math.random() > 0.5 ? 8 : 4;
+
+          await prisma.workRecord.create({
+            data: {
+              assignmentId: assignment.id,
+              roomId: room.id,
+              hours: hours,
+              isVerified: isVerified,
+              createdAt: assignmentDate, // Forzar la fecha de creación para coherencia histórica
+            },
+          });
+          totalRecords++;
+        }
       }
+      
+      // Avanzar al siguiente día
+      currentDate.setDate(currentDate.getDate() + 1);
     }
   }
-  console.log(`- Generadas ${totalAssignments} asignaciones y ${totalRecords} registros de trabajo en los últimos 30 días.`);
+  console.log(`- Generadas ${totalAssignments} asignaciones y ${totalRecords} registros de trabajo desde Enero 2026.`);
 
   // 6. Crear un par de incidencias
   await prisma.incident.create({

@@ -11,7 +11,7 @@ const router = Router();
 
 router.get('/employees', getEmployees);
 router.get('/addresses', getAddresses);
-router.get('/assignments/:userId/:date', getAssignments);
+router.get('/assignments', getAssignments);
 router.post('/assignments', createAssignment);
 router.delete('/assignments/:id', deleteAssignment);
 

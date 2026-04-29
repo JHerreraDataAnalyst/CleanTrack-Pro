@@ -33,28 +33,37 @@ export const getAddresses = async (req: Request, res: Response) => {
   }
 };
 
-// GET /api/admin/assignments/:userId/:date
+// GET /api/admin/assignments
 export const getAssignments = async (req: Request, res: Response) => {
   try {
-    const { userId, date } = req.params;
+    const { startDate, endDate, userId } = req.query;
     
-    // El frontend enviará una fecha en formato YYYY-MM-DD
-    const targetDate = new Date(date as string);
-    const nextDate = new Date(targetDate);
-    nextDate.setDate(nextDate.getDate() + 1);
+    const whereClause: any = {};
+    
+    if (startDate && endDate) {
+      const targetStartDate = new Date(startDate as string);
+      const targetEndDate = new Date(endDate as string);
+      targetEndDate.setHours(23, 59, 59, 999);
+      
+      whereClause.date = {
+        gte: targetStartDate,
+        lte: targetEndDate
+      };
+    }
+    
+    if (userId && userId !== 'all') {
+      whereClause.workerId = userId as string;
+    }
 
     const assignments = await prisma.assignment.findMany({
-      where: {
-        workerId: userId as string,
-        date: {
-          gte: targetDate,
-          lt: nextDate
+      where: whereClause,
+      include: {
+        address: true,
+        worker: {
+          select: { name: true }
         }
       },
-      include: {
-        address: true
-      },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { date: 'asc' }
     });
 
     res.status(200).json(assignments);

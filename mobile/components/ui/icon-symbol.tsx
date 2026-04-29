@@ -24,7 +24,8 @@ const MAPPING = {
   'chart.line.uptrend.xyaxis': 'trending-up',
   'bell.fill': 'notifications',
   'map.fill': 'location-on',
-  'rectangle.portrait.and.arrow.right': 'logout'
+  'rectangle.portrait.and.arrow.right': 'logout',
+  'building.2.fill': 'business'
 } as IconMapping;
 
 /**

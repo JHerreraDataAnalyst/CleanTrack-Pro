@@ -115,7 +115,7 @@ export default function TabLayout() {
         name="sites"
         options={{
           title: 'Sedes',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="map.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="building.2.fill" color={color} />,
           href: user.role === 'TRABAJADOR' ? '/(tabs)/sites' : null,
         }}
       />

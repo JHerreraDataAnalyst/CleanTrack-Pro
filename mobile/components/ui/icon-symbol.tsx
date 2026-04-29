@@ -25,7 +25,9 @@ const MAPPING = {
   'bell.fill': 'notifications',
   'map.fill': 'location-on',
   'rectangle.portrait.and.arrow.right': 'logout',
-  'building.2.fill': 'business'
+  'building.2.fill': 'business',
+  'plus': 'add',
+  'xmark': 'close'
 } as IconMapping;
 
 /**

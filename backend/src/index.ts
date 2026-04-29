@@ -5,6 +5,7 @@ import workRecordRoutes from './routes/workRecordRoutes';
 import authRoutes from './routes/authRoutes';
 import workerRoutes from './routes/workerRoutes';
 import notificationRoutes from './routes/notificationRoutes';
+import adminRoutes from './routes/adminRoutes';
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/work-records', workRecordRoutes);
 app.use('/api/workers', workerRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.get('/', (req, res) => {
   res.send('Limpieza API is running');

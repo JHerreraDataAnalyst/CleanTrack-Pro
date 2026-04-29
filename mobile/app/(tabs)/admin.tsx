@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Modal, FlatList, StyleSheet } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -15,6 +15,17 @@ LocaleConfig.locales['es'] = {
 LocaleConfig.defaultLocale = 'es';
 
 const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+const AGENDA_START_DATE = new Date('2026-04-28').toISOString().split('T')[0];
+
+const AGENDA_THEME = {
+  agendaDayTextColor: '#6B7280',
+  agendaDayNumColor: '#0066FF',
+  agendaTodayColor: '#0066FF',
+  agendaKnobColor: '#0066FF',
+  backgroundColor: '#F3F4F6',
+  calendarBackground: '#ffffff',
+};
 
 export default function AdminDashboardScreen() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'planner'>('dashboard');
@@ -93,7 +104,7 @@ export default function AdminDashboardScreen() {
   const currentAgendaMonthRef = React.useRef<any>(null);
   const loadedMonthsRef = React.useRef<Record<string, string>>({}); // Tracks loaded employee filter per month
 
-  const loadItems = async (day: any, forceReload = false) => {
+  const loadItems = useCallback(async (day: any, forceReload = false) => {
     currentAgendaMonthRef.current = day;
 
     const monthKey = `${day.year}-${String(day.month).padStart(2, '0')}`;
@@ -140,7 +151,7 @@ export default function AdminDashboardScreen() {
     } finally {
       setTimeout(() => setLoadingPlanner(false), 0);
     }
-  };
+  }, [selectedEmployee]);
 
   // Reload agenda when filter changes
   useEffect(() => {
@@ -188,7 +199,7 @@ export default function AdminDashboardScreen() {
     }
   };
 
-  const handleDeleteAssignment = async (id: string) => {
+  const handleDeleteAssignment = useCallback(async (id: string) => {
     Alert.alert(
       "Eliminar Asignación",
       "¿Estás seguro de que deseas eliminar esta asignación?",
@@ -217,7 +228,7 @@ export default function AdminDashboardScreen() {
         }
       ]
     );
-  };
+  }, [loadItems]);
 
   // DASHBOARD HELPERS
   const getStatusColor = (status: string) => {
@@ -244,19 +255,29 @@ export default function AdminDashboardScreen() {
     return max > 0 ? max : 1;
   };
 
-  const renderAgendaItem = (item: any) => {
+  const rowHasChangedMemo = useCallback((r1: any, r2: any) => {
+    if (!r1 || !r2) return r1 !== r2;
+    return r1.id !== r2.id;
+  }, []);
+  
+  const renderEmptyDateMemo = useCallback(() => (
+    <View className="flex-1 justify-center py-6 px-4 mr-4 my-2 border-t border-gray-100">
+      <Text className="text-gray-400 text-center text-sm font-medium">No hay asignaciones este día.</Text>
+    </View>
+  ), []);
+
+  const renderAgendaItem = useCallback((item: any) => {
     return (
       <View className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 my-2 mr-4 flex-row justify-between items-center">
         <View className="flex-1 pr-3">
-          <Text className="font-bold text-brand-dark text-lg mb-1">{item.address.street}</Text>
-          <View className="flex-row items-center mb-1">
-            <IconSymbol name="building.2.fill" size={12} color="#6B7280" />
-            <Text className="text-gray-500 text-sm ml-1">{item.address.city}</Text>
-          </View>
+          <Text className="text-brand-dark font-bold text-base mb-1" numberOfLines={1}>
+            {item.address.street}
+          </Text>
           <View className="flex-row items-center mt-1">
-            <View className="bg-blue-50 px-2 py-1 rounded-md">
-              <Text className="text-brand-primary text-xs font-semibold">{item.worker.name}</Text>
-            </View>
+            <IconSymbol name="person.fill" size={14} color="#6B7280" />
+            <Text className="text-gray-500 text-xs ml-1 flex-1" numberOfLines={1}>
+              {item.worker?.name}
+            </Text>
           </View>
         </View>
         <TouchableOpacity 
@@ -267,8 +288,7 @@ export default function AdminDashboardScreen() {
         </TouchableOpacity>
       </View>
     );
-  };
-
+  }, [handleDeleteAssignment]);
   return (
     <View className="flex-1 bg-brand-light">
       <View className="p-4 pb-2">
@@ -407,22 +427,12 @@ export default function AdminDashboardScreen() {
           <Agenda
             items={items}
             loadItemsForMonth={loadItems}
-            selected={new Date('2026-04-28').toISOString().split('T')[0]} // Ajustado para facilidad en la prueba
+            selected={AGENDA_START_DATE}
             renderItem={renderAgendaItem}
-            rowHasChanged={(r1: any, r2: any) => r1.id !== r2.id}
-            renderEmptyDate={() => (
-              <View className="flex-1 justify-center py-6 px-4 mr-4 my-2 border-t border-gray-100">
-                <Text className="text-gray-400 text-center text-sm font-medium">No hay asignaciones este día.</Text>
-              </View>
-            )}
-            theme={{
-              agendaDayTextColor: '#6B7280',
-              agendaDayNumColor: '#0066FF',
-              agendaTodayColor: '#0066FF',
-              agendaKnobColor: '#0066FF',
-              backgroundColor: '#F3F4F6',
-              calendarBackground: '#ffffff',
-            }}
+            rowHasChanged={rowHasChangedMemo}
+            renderEmptyDate={renderEmptyDateMemo}
+            theme={AGENDA_THEME}
+            showOnlySelectedDayItems={true}
           />
 
           {/* FLOATING ACTION BUTTON (FAB) FOR PLANNER */}

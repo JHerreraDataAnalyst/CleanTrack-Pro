@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-calendars/src/agenda/reservation-list/index.js b/node_modules/react-native-calendars/src/agenda/reservation-list/index.js
+index 3917729..eac2f80 100644
+--- a/node_modules/react-native-calendars/src/agenda/reservation-list/index.js
++++ b/node_modules/react-native-calendars/src/agenda/reservation-list/index.js
+@@ -61,7 +61,9 @@ class ReservationList extends Component {
+         }
+     }
+     updateDataSource(reservations) {
+-        this.setState({ reservations });
++        if (JSON.stringify(this.state.reservations) !== JSON.stringify(reservations)) {
++            this.setState({ reservations });
++        }
+     }
+     updateReservations(props) {
+         const { selectedDay, showOnlySelectedDayItems } = props;

@@ -6,29 +6,11 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '../../context/AuthContext';
 
-function NotificationBell({ userId }: { userId: string }) {
-  const [hasUnread, setHasUnread] = useState(false);
-  const router = useRouter();
+import { useNotifications } from '../../hooks/useNotifications';
 
-  useEffect(() => {
-    const checkNotifications = async () => {
-      try {
-        const res = await fetch(`http://192.168.1.137:3000/api/notifications?userId=${userId}`);
-        const data = await res.json();
-        if (data && data.some((n: any) => !n.isRead)) {
-          setHasUnread(true);
-        } else {
-          setHasUnread(false);
-        }
-      } catch (e) {
-        // Silently fail for polling
-      }
-    };
-    
-    checkNotifications();
-    const interval = setInterval(checkNotifications, 15000); // Poll every 15s
-    return () => clearInterval(interval);
-  }, [userId]);
+function NotificationBell({ userId }: { userId: string }) {
+  const { notifications } = useNotifications();
+  const hasUnread = notifications?.some((n) => !n.isRead) ?? false;
 
   return (
     <Link href="/notifications" asChild>

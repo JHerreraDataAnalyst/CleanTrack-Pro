@@ -1,96 +1,91 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useAuth } from '../context/AuthContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import React from 'react';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useNotifications, Notification } from '../hooks/useNotifications';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export default function NotificationsScreen() {
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
   const router = useRouter();
+  const { notifications, isLoading, markAsRead } = useNotifications();
 
-  const API_URL = 'http://192.168.1.137:3000/api/notifications';
-
-  const fetchNotifications = useCallback(async () => {
-    if (!user) return;
-    try {
-      const response = await fetch(`${API_URL}?userId=${user.id}`);
-      const data = await response.json();
-      setNotifications(data);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    } finally {
-      setLoading(false);
+  const handleNotificationPress = (notification: Notification) => {
+    if (!notification.isRead) {
+      markAsRead(notification.id);
     }
-  }, [user]);
+    // Navegamos al calendario. Como Admin, puede activar su filtro de "Pendientes"
+    router.push('/(tabs)/calendar');
+  };
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
-
-  const markAsRead = async (id: string, isRead: boolean) => {
-    if (isRead) return; // Already read
-    
-    // Optimistic UI update
-    setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, isRead: true } : n)
+  if (isLoading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-gray-50">
+        <ActivityIndicator size="large" color="#1E3A8A" />
+      </View>
     );
+  }
 
-    try {
-      await fetch(`${API_URL}/${id}/read`, {
-        method: 'PATCH',
-      });
-    } catch (error) {
-      console.error('Error marking as read:', error);
-      // Revert if failed
-      fetchNotifications();
-    }
+  const renderItem = ({ item }: { item: Notification }) => {
+    const dateFormatted = format(parseISO(item.createdAt), "d 'de' MMMM, yyyy - HH:mm", { locale: es });
+
+    return (
+      <TouchableOpacity
+        className={`p-4 mb-3 mx-4 rounded-2xl border ${
+          item.isRead ? 'bg-white border-gray-100' : 'bg-blue-50 border-blue-200'
+        } shadow-sm`}
+        onPress={() => handleNotificationPress(item)}
+      >
+        <View className="flex-row items-start">
+          <View className={`mt-1 mr-3 p-2 rounded-full ${item.isRead ? 'bg-gray-100' : 'bg-red-100'}`}>
+            <IconSymbol 
+              name="exclamationmark.triangle.fill" 
+              size={20} 
+              color={item.isRead ? "#9CA3AF" : "#EF4444"} 
+            />
+          </View>
+          <View className="flex-1">
+            <View className="flex-row justify-between items-center mb-1">
+              <Text className={`font-bold text-lg ${item.isRead ? 'text-gray-600' : 'text-gray-900'}`}>
+                {item.title}
+              </Text>
+              {!item.isRead && (
+                <View className="bg-brand-primary w-2 h-2 rounded-full" />
+              )}
+            </View>
+            <Text className={`text-base leading-5 ${item.isRead ? 'text-gray-500' : 'text-gray-700'}`}>
+              {item.message}
+            </Text>
+            <Text className="text-xs text-gray-400 mt-3 font-medium">
+              {dateFormatted}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   return (
-    <View className="flex-1 bg-brand-light">
-      <View className="bg-white px-4 pt-12 pb-4 flex-row items-center border-b border-gray-100">
-        <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
-          <IconSymbol name="chevron.left.forwardslash.chevron.right" size={24} color="#1F2937" />
+    <View className="flex-1 bg-gray-50">
+      <View className="pt-12 pb-4 px-6 bg-white border-b border-gray-100 flex-row items-center">
+        <TouchableOpacity onPress={() => router.back()} className="mr-4 p-2 bg-gray-100 rounded-full">
+          <IconSymbol name="chevron.left" size={20} color="#1F2937" />
         </TouchableOpacity>
-        <Text className="text-xl font-bold text-brand-dark ml-2">Notificaciones</Text>
+        <Text className="text-2xl font-bold text-gray-900">Alertas</Text>
       </View>
 
-      <ScrollView className="flex-1 p-4">
-        {loading ? (
-          <ActivityIndicator size="large" color="#0066FF" style={{ marginTop: 40 }} />
-        ) : notifications.length === 0 ? (
-          <View className="items-center justify-center p-10 mt-10">
-            <IconSymbol name="bell.fill" size={48} color="#D1D5DB" />
-            <Text className="text-gray-500 text-center mt-4">No tienes notificaciones por ahora.</Text>
+      <FlatList
+        data={notifications}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={{ paddingTop: 16, paddingBottom: 40 }}
+        ListEmptyComponent={() => (
+          <View className="flex-1 justify-center items-center mt-20">
+            <IconSymbol name="bell.slash" size={64} color="#D1D5DB" />
+            <Text className="text-gray-500 text-lg mt-4 font-medium">No tienes alertas pendientes</Text>
           </View>
-        ) : (
-          notifications.map((notification) => (
-            <TouchableOpacity 
-              key={notification.id} 
-              className={`rounded-2xl p-4 mb-3 shadow-sm border ${notification.isRead ? 'bg-white border-gray-100' : 'bg-blue-50 border-blue-200'}`}
-              onPress={() => markAsRead(notification.id, notification.isRead)}
-              activeOpacity={0.7}
-            >
-              <View className="flex-row justify-between items-start mb-1">
-                <Text className={`text-lg font-bold ${notification.isRead ? 'text-brand-dark' : 'text-brand-primary'}`}>
-                  {notification.title}
-                </Text>
-                {!notification.isRead && (
-                  <View className="w-2.5 h-2.5 bg-brand-primary rounded-full mt-2" />
-                )}
-              </View>
-              <Text className={`${notification.isRead ? 'text-gray-500' : 'text-gray-800'}`}>
-                {notification.message}
-              </Text>
-              <Text className="text-xs text-gray-400 mt-2">
-                {new Date(notification.createdAt).toLocaleString()}
-              </Text>
-            </TouchableOpacity>
-          ))
         )}
-      </ScrollView>
+      />
     </View>
   );
 }

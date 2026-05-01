@@ -7,10 +7,14 @@ import {
   deleteAssignment 
 } from '../controllers/adminController';
 import { getRoomsByAddress, createAddress, updateAddress } from '../controllers/addressController';
+import { exportReport } from '../controllers/reportController';
 
 const router = Router();
 
 router.get('/employees', getEmployees);
+
+// Reportes
+router.get('/reports/export', exportReport);
 
 // Address CRUD (con gestión de habitaciones)
 router.get('/addresses', getAddresses);

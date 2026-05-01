@@ -3,6 +3,8 @@ import { View, Text, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Mod
 import { useAuth } from '../../context/AuthContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Agenda, LocaleConfig } from 'react-native-calendars';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 // Configuración en español para el calendario
 LocaleConfig.locales['es'] = {
@@ -28,7 +30,7 @@ const AGENDA_THEME = {
 };
 
 export default function AdminDashboardScreen() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'planner'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'planner' | 'reports'>('dashboard');
   const { logout } = useAuth();
 
   // DASHBOARD STATE
@@ -45,6 +47,12 @@ export default function AdminDashboardScreen() {
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [addresses, setAddresses] = useState<any[]>([]);
   const [currentAgendaMonth, setCurrentAgendaMonth] = useState<any>(null);
+
+  // REPORTS STATE
+  const [reportPeriod, setReportPeriod] = useState<'current_month' | 'last_month'>('current_month');
+  const [reportEmployee, setReportEmployee] = useState<string>('all');
+  const [reportData, setReportData] = useState<any>(null);
+  const [loadingReport, setLoadingReport] = useState(false);
 
   // API URLs
   const API_DASHBOARD = 'http://192.168.1.137:3000/api/work-records/dashboard';
@@ -97,6 +105,80 @@ export default function AdminDashboardScreen() {
       setAddresses(data);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // FETCH REPORTS
+  const getReportDates = () => {
+    const now = new Date();
+    // Use 2026 for simulation as it matches the global setup
+    const currentYear = 2026;
+    let startDate: string, endDate: string;
+    
+    if (reportPeriod === 'current_month') {
+      startDate = new Date(currentYear, now.getMonth(), 1).toISOString().split('T')[0];
+      endDate = new Date(currentYear, now.getMonth() + 1, 0).toISOString().split('T')[0];
+    } else {
+      startDate = new Date(currentYear, now.getMonth() - 1, 1).toISOString().split('T')[0];
+      endDate = new Date(currentYear, now.getMonth(), 0).toISOString().split('T')[0];
+    }
+    return { startDate, endDate };
+  };
+
+  const fetchReportData = async () => {
+    setLoadingReport(true);
+    try {
+      const { startDate, endDate } = getReportDates();
+      let url = `${API_ADMIN}/reports/export?startDate=${startDate}&endDate=${endDate}`;
+      if (reportEmployee !== 'all') {
+        url += `&workerId=${reportEmployee}`;
+      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setReportData(data);
+    } catch (e) {
+      console.error('Error fetching reports', e);
+      Alert.alert('Error', 'No se pudieron cargar los datos del reporte');
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      fetchReportData();
+      if (employees.length === 0) fetchEmployees();
+    }
+  }, [activeTab, reportPeriod, reportEmployee]);
+
+  const handleExportCSV = async () => {
+    try {
+      const { startDate, endDate } = getReportDates();
+      let url = `${API_ADMIN}/reports/export?startDate=${startDate}&endDate=${endDate}&format=csv`;
+      if (reportEmployee !== 'all') {
+        url += `&workerId=${reportEmployee}`;
+      }
+      
+      const res = await fetch(url);
+      if (!res.ok) throw new Error();
+      const text = await res.text();
+      
+      const fileUri = `${FileSystem.documentDirectory}reporte_cleantrack_${startDate}_${endDate}.csv`;
+      await FileSystem.writeAsStringAsync(fileUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+      
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Exportar Reporte CSV'
+        });
+      } else {
+        Alert.alert('Error', 'La función de compartir no está disponible en este dispositivo');
+      }
+    } catch (e) {
+      console.error('Export CSV error', e);
+      Alert.alert('Error', 'Error al generar o exportar el archivo CSV');
     }
   };
 
@@ -307,13 +389,19 @@ export default function AdminDashboardScreen() {
             className={`flex-1 py-2 rounded-lg items-center ${activeTab === 'dashboard' ? 'bg-white shadow-sm' : ''}`}
             onPress={() => setActiveTab('dashboard')}
           >
-            <Text className={`font-bold ${activeTab === 'dashboard' ? 'text-brand-primary' : 'text-gray-500'}`}>Dashboard Histórico</Text>
+            <Text className={`font-bold ${activeTab === 'dashboard' ? 'text-brand-primary' : 'text-gray-500'}`}>Dashboard</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             className={`flex-1 py-2 rounded-lg items-center ${activeTab === 'planner' ? 'bg-white shadow-sm' : ''}`}
             onPress={() => setActiveTab('planner')}
           >
-            <Text className={`font-bold ${activeTab === 'planner' ? 'text-brand-primary' : 'text-gray-500'}`}>Agenda Global</Text>
+            <Text className={`font-bold ${activeTab === 'planner' ? 'text-brand-primary' : 'text-gray-500'}`}>Agenda</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            className={`flex-1 py-2 rounded-lg items-center ${activeTab === 'reports' ? 'bg-white shadow-sm' : ''}`}
+            onPress={() => setActiveTab('reports')}
+          >
+            <Text className={`font-bold ${activeTab === 'reports' ? 'text-brand-primary' : 'text-gray-500'}`}>Reportes</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -447,6 +535,86 @@ export default function AdminDashboardScreen() {
             </TouchableOpacity>
           )}
         </View>
+      )}
+
+      {/* REPORTS VIEW */}
+      {activeTab === 'reports' && (
+        <ScrollView className="flex-1 px-4">
+          <Text className="text-xl font-bold text-brand-dark mt-4 mb-4">Exportar Reportes CSV</Text>
+          
+          <View className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
+            <Text className="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wider">Período de Tiempo</Text>
+            <View className="flex-row">
+              <TouchableOpacity
+                className={`flex-1 p-3 rounded-xl border ${reportPeriod === 'current_month' ? 'bg-blue-50 border-brand-primary' : 'bg-gray-50 border-gray-200'} mr-2`}
+                onPress={() => setReportPeriod('current_month')}
+              >
+                <Text className={`text-center font-bold ${reportPeriod === 'current_month' ? 'text-brand-primary' : 'text-gray-600'}`}>Este Mes</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className={`flex-1 p-3 rounded-xl border ${reportPeriod === 'last_month' ? 'bg-blue-50 border-brand-primary' : 'bg-gray-50 border-gray-200'}`}
+                onPress={() => setReportPeriod('last_month')}
+              >
+                <Text className={`text-center font-bold ${reportPeriod === 'last_month' ? 'text-brand-primary' : 'text-gray-600'}`}>Mes Pasado</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
+            <Text className="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wider">Trabajador</Text>
+            <View className="border border-gray-200 rounded-xl overflow-hidden">
+              <TouchableOpacity 
+                className={`p-3 border-b border-gray-100 ${reportEmployee === 'all' ? 'bg-blue-50' : 'bg-white'}`}
+                onPress={() => setReportEmployee('all')}
+              >
+                <Text className={`font-semibold ${reportEmployee === 'all' ? 'text-brand-primary' : 'text-gray-700'}`}>Todos los Trabajadores</Text>
+              </TouchableOpacity>
+              {employees.map((emp) => (
+                <TouchableOpacity 
+                  key={emp.id}
+                  className={`p-3 border-b border-gray-100 ${reportEmployee === emp.id ? 'bg-blue-50' : 'bg-white'}`}
+                  onPress={() => setReportEmployee(emp.id)}
+                >
+                  <Text className={`font-semibold ${reportEmployee === emp.id ? 'text-brand-primary' : 'text-gray-700'}`}>{emp.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {loadingReport ? (
+            <ActivityIndicator size="large" color="#0066FF" style={{ marginVertical: 40 }} />
+          ) : reportData ? (
+            <View className="mb-10">
+              <Text className="text-lg font-bold text-brand-dark mb-3">Resumen de Datos</Text>
+              
+              <View className="flex-row mb-4">
+                <View className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mr-2">
+                  <IconSymbol name="clock.fill" size={24} color="#0066FF" />
+                  <Text className="text-gray-500 mt-2 font-medium">Horas Totales</Text>
+                  <Text className="text-2xl font-black text-brand-dark mt-1">{reportData.summary.totalHours}</Text>
+                </View>
+                <View className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                  <IconSymbol name="checkmark.seal.fill" size={24} color="#10B981" />
+                  <Text className="text-gray-500 mt-2 font-medium">Puntualidad</Text>
+                  <Text className="text-2xl font-black text-brand-dark mt-1">{reportData.summary.punctualityIndex}%</Text>
+                </View>
+              </View>
+
+              <View className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
+                <Text className="text-gray-600 mb-2">Registros A Tiempo: <Text className="font-bold text-green-600">{reportData.summary.onTimeCount}</Text></Text>
+                <Text className="text-gray-600">Registros Tardíos: <Text className="font-bold text-red-600">{reportData.summary.lateCount}</Text></Text>
+              </View>
+
+              <TouchableOpacity 
+                className="bg-brand-primary p-4 rounded-xl flex-row justify-center items-center shadow-md mb-8"
+                onPress={handleExportCSV}
+              >
+                <IconSymbol name="arrow.down.doc.fill" size={20} color="white" />
+                <Text className="text-white font-bold text-lg ml-2">Exportar a CSV</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </ScrollView>
       )}
 
       {/* MODAL CATALOGO DE SEDES */}

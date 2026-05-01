@@ -72,7 +72,7 @@ export default function ProfileScreen() {
       <ScrollView 
         className="flex-1"
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} color="#0066FF" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#0066FF"]} tintColor="#0066FF" />
         }
       >
         {/* HEADER SECTION */}

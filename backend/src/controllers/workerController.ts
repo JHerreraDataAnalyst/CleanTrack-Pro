@@ -65,14 +65,14 @@ export const getPersonalStats = async (req: Request, res: Response) => {
     const totalHours = workRecords.reduce((sum, r) => sum + r.hours, 0);
 
     // 2. Índice de Puntualidad
-    const lateCount = workRecords.filter(r => r.isLate).length;
+    const lateCount = workRecords.filter((r: any) => r.isLate).length;
     const totalReports = workRecords.length;
     const punctualityIndex = totalReports > 0 
       ? Math.round(((totalReports - lateCount) / totalReports) * 100) 
       : 100;
 
     // 3. Servicios Completados (status === 'COMPLETED')
-    const completedServices = await prisma.assignment.count({
+    const completedServices = await (prisma as any).assignment.count({
       where: {
         workerId: workerId as string,
         status: 'COMPLETED',

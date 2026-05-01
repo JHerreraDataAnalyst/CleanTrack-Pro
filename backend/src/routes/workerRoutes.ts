@@ -1,3 +1,4 @@
+import { Router } from 'express';
 import { getMySites, getPersonalStats } from '../controllers/workerController';
 
 const router = Router();

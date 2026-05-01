@@ -111,6 +111,15 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Mi Perfil',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          href: user.role === 'TRABAJADOR' ? '/(tabs)/profile' : null,
+        }}
+      />
+
+      <Tabs.Screen
         name="admin"
         options={{
           title: 'Dashboard',

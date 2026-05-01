@@ -42,7 +42,6 @@ export default function AdminDashboardScreen() {
   // STATS STATE
   const [statsData, setStatsData] = useState<any>(null);
   const [loadingStats, setLoadingStats] = useState(true);
-  const [selectedTooltip, setSelectedTooltip] = useState<string | null>(null);
 
   const screenWidth = Dimensions.get('window').width - 48; // Padding 24 cada lado
 
@@ -437,7 +436,7 @@ export default function AdminDashboardScreen() {
             {MONTHS.map((m, idx) => (
               <TouchableOpacity
                 key={idx}
-                onPress={() => { setSelectedMonth(idx); setSelectedTooltip(null); }}
+                onPress={() => { setSelectedMonth(idx); }}
                 className={`px-4 py-2 rounded-full mr-2 border shadow-sm ${
                   selectedMonth === idx ? 'bg-brand-primary border-brand-primary' : 'bg-white border-gray-200'
                 }`}
@@ -565,18 +564,10 @@ export default function AdminDashboardScreen() {
                       yAxisLabel=""
                       yAxisSuffix="h"
                       withInnerLines={false}
-                      onDataPointClick={({ value, index }: { value: number; index: number }) => {
-                        const worker = statsData.hoursPerWorker[index];
-                        setSelectedTooltip(`${worker.workerName}: ${value}h`);
-                      }}
                     />
                   </ScrollView>
                   {/* Tooltip */}
-                  {selectedTooltip && (
-                    <View className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
-                      <Text className="text-brand-primary font-bold text-center">{selectedTooltip}</Text>
-                    </View>
-                  )}
+
                   {/* Leyenda custom */}
                   <View className="flex-row flex-wrap mt-4 gap-2">
                     {statsData.hoursPerWorker.map((w: any) => (

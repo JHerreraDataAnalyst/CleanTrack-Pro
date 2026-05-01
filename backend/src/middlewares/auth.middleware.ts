@@ -32,3 +32,5 @@ export const requireAuth = (req: AuthRequest, res: Response, next: NextFunction)
     return res.status(401).json({ error: 'Token inválido o expirado.' });
   }
 };
+
+export const authenticate = requireAuth;

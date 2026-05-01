@@ -11,6 +11,7 @@ import calendarRoutes from './routes/calendar.routes';
 import issueRoutes from './routes/issueRoutes';
 import assignmentRoutes from './routes/assignmentRoutes';
 import { initCronJobs } from './cron/lateReportAlerts';
+import * as webDashboard from './controllers/webDashboardController';
 
 dotenv.config();
 
@@ -35,6 +36,11 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/worker', issueRoutes);
 app.use('/api/worker/assignments', assignmentRoutes);
+
+// Web App Compatibility Routes
+app.get('/api/stats', webDashboard.getStats);
+app.get('/api/activity/weekly', webDashboard.getWeeklyActivity);
+app.get('/api/tasks/today', webDashboard.getTasksToday);
 
 app.get('/', (req, res) => {
   res.send('Limpieza API is running');

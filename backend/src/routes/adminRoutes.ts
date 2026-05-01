@@ -8,10 +8,14 @@ import {
 } from '../controllers/adminController';
 import { getRoomsByAddress, createAddress, updateAddress } from '../controllers/addressController';
 import { exportReport } from '../controllers/reportController';
+import { getDashboardStats } from '../controllers/statsController';
 
 const router = Router();
 
 router.get('/employees', getEmployees);
+
+// Stats Dashboard
+router.get('/stats/dashboard', getDashboardStats);
 
 // Reportes
 router.get('/reports/export', exportReport);

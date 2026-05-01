@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Modal, FlatList, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Modal, FlatList, StyleSheet, Dimensions } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Agenda, LocaleConfig } from 'react-native-calendars';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { BarChart, PieChart } from 'react-native-chart-kit';
 
 // Configuración en español para el calendario
 LocaleConfig.locales['es'] = {
@@ -38,6 +39,13 @@ export default function AdminDashboardScreen() {
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
 
+  // STATS STATE
+  const [statsData, setStatsData] = useState<any>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [selectedTooltip, setSelectedTooltip] = useState<string | null>(null);
+
+  const screenWidth = Dimensions.get('window').width - 48; // Padding 24 cada lado
+
   // PLANNER STATE
   const [employees, setEmployees] = useState<any[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
@@ -57,13 +65,28 @@ export default function AdminDashboardScreen() {
   // API URLs
   const API_DASHBOARD = 'http://192.168.1.137:3000/api/work-records/dashboard';
   const API_ADMIN = 'http://192.168.1.137:3000/api/admin';
+  const API_STATS = 'http://192.168.1.137:3000/api/admin/stats/dashboard';
 
-  // FETCH DASHBOARD
+  // FETCH DASHBOARD (legacy payroll data)
   useEffect(() => {
     if (activeTab === 'dashboard') {
       fetchDashboardData();
+      fetchStatsData();
     }
   }, [activeTab, selectedMonth]);
+
+  const fetchStatsData = async () => {
+    setLoadingStats(true);
+    try {
+      const response = await fetch(`${API_STATS}?month=${selectedMonth}&year=2026`);
+      const json = await response.json();
+      setStatsData(json);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
 
   const fetchDashboardData = async () => {
     setLoadingDashboard(true);
@@ -408,90 +431,258 @@ export default function AdminDashboardScreen() {
 
       {/* DASHBOARD VIEW */}
       {activeTab === 'dashboard' && (
-        <ScrollView className="flex-1 px-4">
+        <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
           {/* MONTH SELECTOR */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6 mt-2">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6 mt-2 -mx-1">
             {MONTHS.map((m, idx) => (
               <TouchableOpacity
                 key={idx}
-                onPress={() => setSelectedMonth(idx)}
-                className={`px-5 py-2 rounded-full mr-2 border shadow-sm ${selectedMonth === idx ? 'bg-brand-primary border-brand-primary' : 'bg-white border-gray-200'}`}
+                onPress={() => { setSelectedMonth(idx); setSelectedTooltip(null); }}
+                className={`px-4 py-2 rounded-full mr-2 border shadow-sm ${
+                  selectedMonth === idx ? 'bg-brand-primary border-brand-primary' : 'bg-white border-gray-200'
+                }`}
               >
-                <Text className={selectedMonth === idx ? 'text-white font-bold' : 'text-gray-600 font-medium'}>{m} 2026</Text>
+                <Text className={selectedMonth === idx ? 'text-white font-bold text-sm' : 'text-gray-600 font-medium text-sm'}>
+                  {m} 2026
+                </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
 
-          {loadingDashboard ? (
-            <ActivityIndicator size="large" color="#0066FF" style={{ marginTop: 40 }} />
-          ) : dashboardData ? (
+          {(loadingDashboard || loadingStats) ? (
+            <View className="flex-1 items-center justify-center py-20">
+              <ActivityIndicator size="large" color="#1E3A8A" />
+              <Text className="text-gray-500 mt-3 font-medium">Cargando estadísticas...</Text>
+            </View>
+          ) : (
             <>
-              <View className="bg-brand-primary p-6 rounded-2xl shadow-lg mb-8">
-                <Text className="text-brand-light font-medium text-base mb-1">Gasto de Nómina ({MONTHS[selectedMonth]})</Text>
-                <Text className="text-white text-4xl font-black">€{dashboardData.totalPayroll.toFixed(2)}</Text>
-                <View className="flex-row mt-3 items-center">
-                  <IconSymbol name="chart.line.uptrend.xyaxis" size={16} color="white" />
-                  <Text className="text-white ml-2 opacity-80 text-sm">Registro histórico consolidado</Text>
-                </View>
-              </View>
-
-              <View className="bg-white p-5 rounded-2xl shadow-sm mb-8 border border-gray-100">
-                <Text className="text-lg font-bold text-brand-dark mb-4">Gasto Diario ({MONTHS[selectedMonth]})</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View className="flex-row items-end h-40 pt-4 pr-4">
-                    {dashboardData.dailySpending && dashboardData.dailySpending.map((day: any, index: number) => {
-                      const heightPercentage = (day.monto_total / getMaxDailySpending()) * 100;
-                      const dayNumber = day.fecha.split('-')[2];
-                      
-                      return (
-                        <View key={index} className="items-center w-12">
-                          <Text className="text-[10px] text-gray-400 mb-1 font-semibold">€{day.monto_total}</Text>
-                          <View className="w-6 bg-brand-primary/10 rounded-t-lg overflow-hidden h-24 justify-end">
-                            <View 
-                              className="w-full bg-brand-primary rounded-t-lg" 
-                              style={{ height: `${heightPercentage}%` }} 
-                            />
-                          </View>
-                          <Text className="text-xs text-brand-dark mt-2">{dayNumber}</Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </View>
-
-              <Text className="text-xl font-bold text-brand-dark mb-2">Desempeño Mensual y Costos</Text>
-              <View className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-8">
-                {dashboardData.trafficLight.length === 0 ? (
-                  <View className="p-6 items-center">
-                    <Text className="text-gray-500">No hay registros para este mes.</Text>
-                  </View>
-                ) : (
-                  dashboardData.trafficLight.map((worker: any, index: number) => (
-                    <View 
-                      key={worker.workerId} 
-                      className={`flex-row items-center p-4 ${index !== dashboardData.trafficLight.length - 1 ? 'border-b border-gray-100' : ''}`}
-                    >
-                      <View className={`w-3 h-3 rounded-full mr-4 ${getStatusColor(worker.status)}`} />
-                      <View className="flex-1">
-                        <Text className="text-brand-dark font-semibold text-lg">{worker.workerName}</Text>
-                        <Text className={`text-xs mt-0.5 ${
-                          worker.status === 'green' ? 'text-green-600' : 
-                          worker.status === 'yellow' ? 'text-yellow-600' : 'text-red-600'
-                        }`}>
-                          Estado Mes: {getStatusText(worker.status)}
-                        </Text>
+              {/* ── HERO CARD: Global Punctuality ──────────────────────────── */}
+              {statsData && (
+                <View className="rounded-3xl overflow-hidden mb-6 shadow-lg" style={{ backgroundColor: '#1E3A8A' }}>
+                  <View className="p-6">
+                    <Text className="text-blue-200 font-semibold text-sm mb-1 uppercase tracking-wider">Índice de Puntualidad Global</Text>
+                    <Text className="text-white text-5xl font-black">{statsData.globalPunctuality.onTimePercent}%</Text>
+                    <Text className="text-blue-200 text-sm mt-1">{MONTHS[selectedMonth]} 2026 • {statsData.globalPunctuality.total} registros</Text>
+                    <View className="flex-row mt-4 gap-4">
+                      <View className="flex-row items-center">
+                        <View className="w-3 h-3 rounded-full bg-emerald-400 mr-2" />
+                        <Text className="text-white text-sm">{statsData.globalPunctuality.onTime} a tiempo</Text>
                       </View>
-                      <View className="items-end">
-                        <Text className="text-gray-500 text-xs mb-0.5">Acumulado Mes</Text>
-                        <Text className="text-brand-dark font-black">€{(worker.monthlyTotal || 0).toFixed(2)}</Text>
+                      <View className="flex-row items-center">
+                        <View className="w-3 h-3 rounded-full bg-rose-400 mr-2" />
+                        <Text className="text-white text-sm">{statsData.globalPunctuality.late} tardíos</Text>
                       </View>
                     </View>
-                  ))
-                )}
-              </View>
+                  </View>
+
+                  {/* Donut-style progress bar */}
+                  <View className="mx-6 mb-6">
+                    <View className="h-3 bg-blue-900 rounded-full overflow-hidden">
+                      <View
+                        className="h-full bg-emerald-400 rounded-full"
+                        style={{ width: `${statsData.globalPunctuality.onTimePercent}%` }}
+                      />
+                    </View>
+                    <View className="flex-row justify-between mt-1">
+                      <Text className="text-blue-300 text-xs">0%</Text>
+                      <Text className="text-blue-300 text-xs">100%</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* ── DONUT CHART: Pie de Puntualidad ──────────────────────── */}
+              {statsData && statsData.globalPunctuality.total > 0 && (
+                <View className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-6">
+                  <Text className="text-lg font-bold text-gray-800 mb-1">Desglose de Puntualidad</Text>
+                  <Text className="text-gray-500 text-sm mb-4">Reportes a tiempo vs. tardíos</Text>
+                  <View className="items-center">
+                    <PieChart
+                      data={[
+                        {
+                          name: 'A Tiempo',
+                          population: statsData.globalPunctuality.onTime,
+                          color: '#10B981',
+                          legendFontColor: '#374151',
+                          legendFontSize: 13,
+                        },
+                        {
+                          name: 'Tardíos',
+                          population: Math.max(statsData.globalPunctuality.late, 1),
+                          color: '#F43F5E',
+                          legendFontColor: '#374151',
+                          legendFontSize: 13,
+                        },
+                      ]}
+                      width={screenWidth - 16}
+                      height={180}
+                      chartConfig={{
+                        color: (opacity = 1) => `rgba(30, 58, 138, ${opacity})`,
+                        backgroundColor: '#ffffff',
+                        backgroundGradientFrom: '#ffffff',
+                        backgroundGradientTo: '#ffffff',
+                      }}
+                      accessor="population"
+                      backgroundColor="transparent"
+                      paddingLeft="10"
+                      absolute={false}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* ── BAR CHART: Horas por Trabajador ──────────────────────── */}
+              {statsData && statsData.hoursPerWorker.length > 0 && (
+                <View className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-6">
+                  <Text className="text-lg font-bold text-gray-800 mb-1">Horas por Empleado</Text>
+                  <Text className="text-gray-500 text-sm mb-4">Total de horas trabajadas en el período</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <BarChart
+                      data={{
+                        labels: statsData.hoursPerWorker.map((w: any) =>
+                          w.workerName.split(' ')[0]
+                        ),
+                        datasets: [
+                          {
+                            data: statsData.hoursPerWorker.map((w: any) => w.totalHours || 0),
+                          },
+                        ],
+                      }}
+                      width={Math.max(screenWidth, statsData.hoursPerWorker.length * 80)}
+                      height={200}
+                      chartConfig={{
+                        backgroundColor: '#1E3A8A',
+                        backgroundGradientFrom: '#1E3A8A',
+                        backgroundGradientTo: '#2563EB',
+                        decimalPlaces: 1,
+                        color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                        labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                        style: { borderRadius: 16 },
+                        propsForBars: { rx: '4', ry: '4' },
+                      }}
+                      style={{ borderRadius: 16 }}
+                      fromZero
+                      showValuesOnTopOfBars
+                      yAxisLabel=""
+                      yAxisSuffix="h"
+                      withInnerLines={false}
+                      onDataPointClick={({ value, index }) => {
+                        const worker = statsData.hoursPerWorker[index];
+                        setSelectedTooltip(`${worker.workerName}: ${value}h`);
+                      }}
+                    />
+                  </ScrollView>
+                  {/* Tooltip */}
+                  {selectedTooltip && (
+                    <View className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <Text className="text-brand-primary font-bold text-center">{selectedTooltip}</Text>
+                    </View>
+                  )}
+                  {/* Leyenda custom */}
+                  <View className="flex-row flex-wrap mt-4 gap-2">
+                    {statsData.hoursPerWorker.map((w: any) => (
+                      <View key={w.workerId} className="flex-row items-center bg-blue-50 px-3 py-1.5 rounded-full">
+                        <View className="w-2.5 h-2.5 rounded-full bg-brand-primary mr-2" />
+                        <Text className="text-brand-primary text-xs font-semibold">{w.workerName.split(' ')[0]}: {w.totalHours}h</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* ── ISSUE HOTSPOTS: Ranking de Alertas ───────────────────── */}
+              {statsData && (
+                <View className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-6">
+                  <View className="flex-row items-center mb-4">
+                    <View className="w-8 h-8 rounded-full bg-rose-100 items-center justify-center mr-3">
+                      <IconSymbol name="exclamationmark.triangle.fill" size={18} color="#F43F5E" />
+                    </View>
+                    <View>
+                      <Text className="text-lg font-bold text-gray-800">Hotspots de Incidencias</Text>
+                      <Text className="text-gray-500 text-sm">Sitios con más problemas reportados</Text>
+                    </View>
+                  </View>
+
+                  {statsData.issueHotspots.length === 0 ? (
+                    <View className="py-8 items-center">
+                      <IconSymbol name="checkmark.circle.fill" size={40} color="#10B981" />
+                      <Text className="text-green-600 font-bold mt-2">Sin incidencias este período</Text>
+                    </View>
+                  ) : (
+                    statsData.issueHotspots.map((site: any, idx: number) => {
+                      const maxCount = statsData.issueHotspots[0].issueCount || 1;
+                      const barWidth = (site.issueCount / maxCount) * 100;
+                      const colors = ['#F43F5E', '#FB7185', '#FDA4AF', '#FECDD3', '#FFF1F2'];
+                      return (
+                        <View key={site.siteId} className="mb-4">
+                          <View className="flex-row justify-between items-start mb-1">
+                            <View className="flex-row items-center flex-1 mr-2">
+                              <Text className="text-xs font-black text-gray-400 mr-2 w-4">#{idx + 1}</Text>
+                              <Text className="text-gray-800 font-semibold text-sm flex-1" numberOfLines={1}>
+                                {site.street}
+                              </Text>
+                            </View>
+                            <View className="bg-rose-100 px-2 py-0.5 rounded-full">
+                              <Text className="text-rose-600 font-black text-xs">{site.issueCount} incid.</Text>
+                            </View>
+                          </View>
+                          <View className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                            <View
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${barWidth}%`,
+                                backgroundColor: colors[idx] || '#F43F5E',
+                              }}
+                            />
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              )}
+
+              {/* ── SITE WORKLOAD ─────────────────────────────────────────── */}
+              {statsData && statsData.siteWorkload.length > 0 && (
+                <View className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-8">
+                  <Text className="text-lg font-bold text-gray-800 mb-1">Carga por Sede</Text>
+                  <Text className="text-gray-500 text-sm mb-4">Horas acumuladas en el período por dirección</Text>
+                  {statsData.siteWorkload.map((site: any, idx: number) => {
+                    const maxHours = statsData.siteWorkload[0].totalHours || 1;
+                    const barWidth = (site.totalHours / maxHours) * 100;
+                    return (
+                      <View key={site.siteId} className="mb-3">
+                        <View className="flex-row justify-between mb-1">
+                          <Text className="text-gray-700 text-sm font-medium flex-1 mr-2" numberOfLines={1}>
+                            {site.street}
+                          </Text>
+                          <Text className="text-brand-primary font-bold text-sm">{site.totalHours}h</Text>
+                        </View>
+                        <View className="h-2 bg-blue-50 rounded-full overflow-hidden">
+                          <View
+                            className="h-full bg-brand-primary rounded-full"
+                            style={{ width: `${barWidth}%` }}
+                          />
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* ── LEGACY: Payroll card ─────────────────────────────────── */}
+              {dashboardData && (
+                <View className="bg-brand-primary p-6 rounded-2xl shadow-lg mb-8">
+                  <Text className="text-blue-200 font-medium text-sm mb-1">Nómina Estimada ({MONTHS[selectedMonth]})</Text>
+                  <Text className="text-white text-4xl font-black">€{dashboardData.totalPayroll?.toFixed(2) ?? '0.00'}</Text>
+                  <View className="flex-row mt-3 items-center">
+                    <IconSymbol name="chart.line.uptrend.xyaxis" size={16} color="white" />
+                    <Text className="text-white ml-2 opacity-80 text-sm">Registro histórico consolidado</Text>
+                  </View>
+                </View>
+              )}
             </>
-          ) : null}
+          )}
         </ScrollView>
       )}
 

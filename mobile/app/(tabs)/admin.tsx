@@ -3,7 +3,7 @@ import { View, Text, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Mod
 import { useAuth } from '../../context/AuthContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Agenda, LocaleConfig } from 'react-native-calendars';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { BarChart, PieChart } from 'react-native-chart-kit';
 
@@ -558,7 +558,6 @@ export default function AdminDashboardScreen() {
                         color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
                         labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
                         style: { borderRadius: 16 },
-                        propsForBars: { rx: '4', ry: '4' },
                       }}
                       style={{ borderRadius: 16 }}
                       fromZero
@@ -566,7 +565,7 @@ export default function AdminDashboardScreen() {
                       yAxisLabel=""
                       yAxisSuffix="h"
                       withInnerLines={false}
-                      onDataPointClick={({ value, index }) => {
+                      onDataPointClick={({ value, index }: { value: number; index: number }) => {
                         const worker = statsData.hoursPerWorker[index];
                         setSelectedTooltip(`${worker.workerName}: ${value}h`);
                       }}

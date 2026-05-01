@@ -224,10 +224,10 @@ export const getMyHistory = async (req: Request, res: Response) => {
 // POST /api/work-records
 export const logHours = async (req: Request, res: Response) => {
   try {
-    const { assignmentId, roomName, hours } = req.body;
+    const { assignmentId, roomId, hours } = req.body;
 
-    if (!assignmentId || !roomName || hours === undefined) {
-      return res.status(400).json({ error: 'Faltan campos requeridos (assignmentId, roomName, hours)' });
+    if (!assignmentId || !roomId || hours === undefined) {
+      return res.status(400).json({ error: 'Faltan campos requeridos (assignmentId, roomId, hours)' });
     }
 
     // 1. Obtener la asignación para verificar la dirección y la fecha
@@ -240,22 +240,18 @@ export const logHours = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Asignación no encontrada' });
     }
 
-    // 2. Buscar o crear la habitación (Room) para esa dirección
-    // Primero, verificamos si ya existe una habitación con ese nombre para esa dirección
-    let room = await prisma.room.findFirst({
+    // 2. Validar que la habitación exista Y pertenezca a la dirección de esta asignación.
+    // Esto previene que un trabajador reporte horas en una habitación de otro sitio.
+    const room = await prisma.room.findFirst({
       where: {
-        addressId: assignment.addressId,
-        name: { equals: roomName, mode: 'insensitive' }
-      }
+        id: roomId,
+        addressId: assignment.addressId, // La habitación debe ser de ESTA dirección
+      },
     });
 
-    // Si no existe, la creamos
     if (!room) {
-      room = await prisma.room.create({
-        data: {
-          name: roomName,
-          addressId: assignment.addressId
-        }
+      return res.status(400).json({ 
+        error: 'La habitación seleccionada no pertenece a esta dirección o no existe. Por favor, recarga el formulario.' 
       });
     }
 
@@ -263,7 +259,7 @@ export const logHours = async (req: Request, res: Response) => {
     // Es tardío si se reporta después de las 23:59 del día de la asignación
     const isLate = isAfter(new Date(), endOfDay(assignment.date));
 
-    // 4. Crear el WorkRecord
+    // 4. Crear el WorkRecord con el roomId validado
     const workRecord = await prisma.workRecord.create({
       data: {
         assignmentId,

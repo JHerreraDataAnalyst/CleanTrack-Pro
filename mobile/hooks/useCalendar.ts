@@ -8,6 +8,7 @@ const API_BASE_URL = 'http://192.168.1.137:3000/api/calendar';
 export interface CalendarAssignment {
   id: string;
   date: string;
+  addressId: string;
   address: {
     street: string;
     city: string;

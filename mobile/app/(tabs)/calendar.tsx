@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, TextInput, Alert, Switch } from 'react-native';
 import { Calendar, Agenda, CalendarList } from 'react-native-calendars';
 import { useCalendar, CalendarAssignment } from '../../hooks/useCalendar';
@@ -7,6 +7,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { isBefore, startOfDay, parseISO } from 'date-fns';
+import { useAuth } from '../../context/AuthContext';
+
+const API_BASE = 'http://192.168.1.137:3000/api';
 
 export default function CalendarScreen() {
   const {
@@ -32,8 +35,41 @@ export default function CalendarScreen() {
 
   // Estado para el modal de registro de trabajo
   const [logHoursAssignment, setLogHoursAssignment] = useState<CalendarAssignment | null>(null);
-  const [roomLogs, setRoomLogs] = useState([{ roomName: '', hours: '' }]);
+  const [roomLogs, setRoomLogs] = useState([{ roomId: '', hours: '' }]);
+  const [siteRooms, setSiteRooms] = useState<Array<{ id: string; name: string }>>([]);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Cargar las habitaciones predefinidas del sitio cuando se abre el modal
+  useEffect(() => {
+    if (logHoursAssignment) {
+      const fetchRooms = async () => {
+        setIsLoadingRooms(true);
+        try {
+          const addressId = logHoursAssignment.addressId;
+          const res = await fetch(`${API_BASE}/admin/addresses/${addressId}/rooms`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          setSiteRooms(data);
+          // Inicializar roomLogs con el primer cuarto seleccionado si hay habitaciones
+          if (data.length > 0) {
+            setRoomLogs([{ roomId: data[0].id, hours: '' }]);
+          }
+        } catch {
+          Alert.alert('Error', 'No se pudieron cargar las habitaciones del sitio.');
+          setLogHoursAssignment(null);
+        } finally {
+          setIsLoadingRooms(false);
+        }
+      };
+      fetchRooms();
+    } else {
+      setSiteRooms([]);
+      setRoomLogs([{ roomId: '', hours: '' }]);
+    }
+  }, [logHoursAssignment]);
 
   const handleAddAssignment = () => {
     console.log('Navegando a crear asignación...');
@@ -42,19 +78,17 @@ export default function CalendarScreen() {
   const handleLogHoursSubmit = async () => {
     if (!logHoursAssignment || !token) return;
     
-    // Validate
     for (const log of roomLogs) {
-      if (!log.roomName.trim() || !log.hours.trim() || isNaN(Number(log.hours))) {
-        Alert.alert('Error', 'Por favor completa todos los campos correctamente con valores numéricos para las horas.');
+      if (!log.roomId || !log.hours.trim() || isNaN(Number(log.hours))) {
+        Alert.alert('Error', 'Por favor selecciona una habitación e ingresa las horas para cada registro.');
         return;
       }
     }
 
     setIsSubmitting(true);
     try {
-      // Enviar cada registro
       for (const log of roomLogs) {
-        const response = await fetch(`http://192.168.1.137:3000/api/work-records`, {
+        const response = await fetch(`${API_BASE}/work-records`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -62,23 +96,22 @@ export default function CalendarScreen() {
           },
           body: JSON.stringify({
             assignmentId: logHoursAssignment.id,
-            roomName: log.roomName,
+            roomId: log.roomId,
             hours: Number(log.hours),
           }),
         });
 
         if (!response.ok) {
-          throw new Error('Error al guardar registro');
+          const err = await response.json();
+          throw new Error(err.error || 'Error al guardar registro');
         }
       }
 
       Alert.alert('Éxito', 'Horas registradas correctamente.');
       setLogHoursAssignment(null);
-      setRoomLogs([{ roomName: '', hours: '' }]);
-      refetch(); // Refrescar el calendario
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Hubo un problema al registrar las horas.');
+      refetch();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Hubo un problema al registrar las horas.');
     } finally {
       setIsSubmitting(false);
     }
@@ -325,60 +358,96 @@ export default function CalendarScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text className="text-gray-600 mb-4">
-                Ingresa el nombre de la habitación o área y el tiempo total dedicado. Si trabajaste en varias áreas, añade más filas.
-              </Text>
-
-              {roomLogs.map((log, index) => (
-                <View key={index} className="flex-row mb-4 space-x-2">
-                  <View className="flex-1">
-                    <Text className="text-xs text-gray-500 mb-1 font-bold ml-1">ÁREA / HABITACIÓN</Text>
-                    <TextInput 
-                      className="bg-gray-100 p-3 rounded-xl text-gray-800 border border-gray-200"
-                      placeholder="Ej. Cocina, Baño Principal..."
-                      value={log.roomName}
-                      onChangeText={(val) => {
-                        const newLogs = [...roomLogs];
-                        newLogs[index].roomName = val;
-                        setRoomLogs(newLogs);
-                      }}
-                    />
-                  </View>
-                  <View className="w-24">
-                    <Text className="text-xs text-gray-500 mb-1 font-bold ml-1">HORAS</Text>
-                    <TextInput 
-                      className="bg-gray-100 p-3 rounded-xl text-gray-800 border border-gray-200 text-center"
-                      placeholder="Ej. 2.5"
-                      keyboardType="numeric"
-                      value={log.hours}
-                      onChangeText={(val) => {
-                        const newLogs = [...roomLogs];
-                        newLogs[index].hours = val;
-                        setRoomLogs(newLogs);
-                      }}
-                    />
-                  </View>
+              {isLoadingRooms ? (
+                <View className="py-10 items-center">
+                  <ActivityIndicator size="large" color="#1E3A8A" />
+                  <Text className="text-gray-500 mt-3">Cargando habitaciones del sitio...</Text>
                 </View>
-              ))}
+              ) : siteRooms.length === 0 ? (
+                <View className="py-10 items-center">
+                  <IconSymbol name="exclamationmark.triangle.fill" size={40} color="#F59E0B" />
+                  <Text className="text-gray-700 font-bold mt-3 text-center">Este sitio no tiene habitaciones predefinidas.</Text>
+                  <Text className="text-gray-500 text-sm mt-1 text-center">Un administrador debe configurarlas primero.</Text>
+                </View>
+              ) : (
+                <>
+                  <Text className="text-gray-600 mb-4">
+                    Selecciona la habitación en la que trabajaste e ingresa las horas. Puedes añadir varias.
+                  </Text>
 
-              <TouchableOpacity 
-                className="py-3 border-2 border-dashed border-gray-300 rounded-xl items-center mb-6"
-                onPress={() => setRoomLogs([...roomLogs, { roomName: '', hours: '' }])}
-              >
-                <Text className="text-gray-500 font-bold">+ Añadir otra habitación</Text>
-              </TouchableOpacity>
+                  {roomLogs.map((log, index) => (
+                    <View key={index} className="mb-5 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                      <View className="flex-row justify-between items-center mb-3">
+                        <Text className="text-xs text-gray-500 font-bold uppercase tracking-wider">
+                          Habitación {index + 1}
+                        </Text>
+                        {roomLogs.length > 1 && (
+                          <TouchableOpacity onPress={() => setRoomLogs(roomLogs.filter((_, i) => i !== index))}>
+                            <IconSymbol name="trash" size={16} color="#EF4444" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      {/* Room Selector: Chips */}
+                      <View className="flex-row flex-wrap gap-2 mb-3">
+                        {siteRooms.map((room) => {
+                          const isSelected = log.roomId === room.id;
+                          return (
+                            <TouchableOpacity
+                              key={room.id}
+                              onPress={() => {
+                                const newLogs = [...roomLogs];
+                                newLogs[index].roomId = room.id;
+                                setRoomLogs(newLogs);
+                              }}
+                              className={`px-4 py-2 rounded-full border ${
+                                isSelected
+                                  ? 'bg-brand-primary border-brand-primary'
+                                  : 'bg-white border-gray-300'
+                              }`}
+                            >
+                              <Text className={`font-semibold text-sm ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+                                {room.name}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                      {/* Hours Input */}
+                      <Text className="text-xs text-gray-500 mb-1 font-bold ml-1">HORAS TRABAJADAS</Text>
+                      <TextInput
+                        className="bg-white p-3 rounded-xl text-gray-800 border border-gray-200 text-center text-lg font-bold"
+                        placeholder="Ej. 2.5"
+                        keyboardType="numeric"
+                        value={log.hours}
+                        onChangeText={(val) => {
+                          const newLogs = [...roomLogs];
+                          newLogs[index].hours = val;
+                          setRoomLogs(newLogs);
+                        }}
+                      />
+                    </View>
+                  ))}
 
-              <TouchableOpacity 
-                className={`py-4 rounded-xl items-center shadow-sm ${isSubmitting ? 'bg-blue-300' : 'bg-brand-primary'}`}
-                onPress={handleLogHoursSubmit}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text className="text-white font-bold text-lg">Guardar Registro</Text>
-                )}
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    className="py-3 border-2 border-dashed border-gray-300 rounded-xl items-center mb-6"
+                    onPress={() => setRoomLogs([...roomLogs, { roomId: siteRooms[0]?.id ?? '', hours: '' }])}
+                  >
+                    <Text className="text-gray-500 font-bold">+ Añadir otra habitación</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    className={`py-4 rounded-xl items-center shadow-sm ${isSubmitting ? 'bg-blue-300' : 'bg-brand-primary'}`}
+                    onPress={handleLogHoursSubmit}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <Text className="text-white font-bold text-lg">Guardar Registro</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
             </ScrollView>
           </View>
         </View>

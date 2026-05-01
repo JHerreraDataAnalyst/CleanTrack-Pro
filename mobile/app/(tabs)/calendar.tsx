@@ -51,6 +51,17 @@ export default function CalendarScreen() {
   
   const [isClosingJornada, setIsClosingJornada] = useState(false);
 
+  // ── Add Assignment Modal (Admin) ──────────────────────────────────────
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addWorkers, setAddWorkers] = useState<Array<{id: string; name: string; email: string}>>([]);
+  const [addAddresses, setAddAddresses] = useState<Array<{id: string; street: string; city: string}>>([]);
+  const [addWorkerId, setAddWorkerId] = useState('');
+  const [addAddressId, setAddAddressId] = useState('');
+  const [addDate, setAddDate] = useState('');
+  const [addShowCalendar, setAddShowCalendar] = useState(false);
+  const [isLoadingFormData, setIsLoadingFormData] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
   // Cargar las habitaciones predefinidas del sitio cuando se abre el modal
   useEffect(() => {
     if (logHoursAssignment) {
@@ -82,8 +93,28 @@ export default function CalendarScreen() {
     }
   }, [logHoursAssignment]);
 
-  const handleAddAssignment = () => {
-    console.log('Navegando a crear asignación...');
+  const handleAddAssignment = async () => {
+    setAddWorkerId('');
+    setAddAddressId('');
+    setAddDate(selectedDate);
+    setAddShowCalendar(false);
+    setShowAddModal(true);
+    setIsLoadingFormData(true);
+    try {
+      const [wRes, aRes] = await Promise.all([
+        fetch(`${API_BASE}/admin/employees`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/admin/addresses`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const workers = await wRes.json();
+      const addresses = await aRes.json();
+      setAddWorkers(workers);
+      setAddAddresses(addresses);
+    } catch {
+      Alert.alert('Error', 'No se pudo cargar la lista de trabajadores o sedes.');
+      setShowAddModal(false);
+    } finally {
+      setIsLoadingFormData(false);
+    }
   };
 
   const handleLogHoursSubmit = async () => {
@@ -287,6 +318,30 @@ export default function CalendarScreen() {
     }
   };
 
+  const handleCreateAssignment = async () => {
+    if (!addWorkerId || !addAddressId || !addDate) {
+      Alert.alert('Campos incompletos', 'Selecciona un trabajador, una sede y una fecha.');
+      return;
+    }
+    setIsCreating(true);
+    try {
+      const response = await fetch(`${API_BASE}/admin/assignments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ workerId: addWorkerId, addressId: addAddressId, date: addDate }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error al crear asignación');
+      Alert.alert('✅ Asignación Creada', `Servicio programado para el ${addDate}.`);
+      setShowAddModal(false);
+      queryClient.invalidateQueries({ queryKey: ['calendarAssignments'] });
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
@@ -336,23 +391,76 @@ export default function CalendarScreen() {
 
 
       {/* Calendar Views */}
-      <View className="flex-1">
+      <View className="flex-1 overflow-hidden">
         {viewMode === 'month' && (
-          <Calendar
-            current={selectedDate}
-            onDayPress={(day) => setSelectedDate(day.dateString)}
-            markedDates={markedDates}
-            theme={CALENDAR_THEME}
-            enableSwipeMonths={true}
-            markingType={'custom'}
-          />
+          <View className="flex-1">
+            <Calendar
+              current={selectedDate}
+              onDayPress={(day) => setSelectedDate(day.dateString)}
+              markedDates={markedDates}
+              theme={CALENDAR_THEME}
+              enableSwipeMonths={true}
+              markingType={'custom'}
+            />
+            {/* Task list for selected date — no overlap, fills remaining space */}
+            <View className="flex-1 bg-gray-50">
+              <View className="px-4 py-2 bg-white border-b border-gray-100 flex-row justify-between items-center">
+                <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  Servicios — {selectedDate}
+                </Text>
+                <Text className="text-brand-primary text-xs font-bold">
+                  {(agendaItems[selectedDate] || []).length} tarea(s)
+                </Text>
+              </View>
+              <ScrollView className="flex-1" contentContainerStyle={{ padding: 12, paddingBottom: 100 }}>
+                {(agendaItems[selectedDate] || []).length === 0 ? (
+                  <View className="py-10 items-center opacity-40">
+                    <IconSymbol name="calendar.badge.exclamationmark" size={40} color="#9CA3AF" />
+                    <Text className="text-gray-500 mt-2 font-medium">Sin tareas para este día</Text>
+                  </View>
+                ) : (
+                  (agendaItems[selectedDate] || []).map((item: any) => {
+                    const isPast = isBefore(parseISO(item.date), startOfDay(new Date()));
+                    const isPending = isPast && item.totalHours === 0;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        className={`bg-white p-4 rounded-xl shadow-sm border mb-3 ${isPending && userRole === 'ADMIN' ? 'border-red-300 bg-red-50' : 'border-gray-100'}`}
+                        onPress={() => setSelectedAssignment(item)}
+                      >
+                        <View className="flex-row justify-between items-center mb-1">
+                          <View className="flex-row items-center flex-1">
+                            {item.status === 'COMPLETED' && (
+                              <IconSymbol name="checkmark.circle.fill" size={16} color="#10B981" />
+                            )}
+                            {isPending && userRole === 'ADMIN' && (
+                              <IconSymbol name="exclamationmark.triangle.fill" size={16} color="#EF4444" />
+                            )}
+                            <Text className="text-brand-primary font-bold text-base flex-1 ml-1" numberOfLines={1}>
+                              {item.address.street}
+                            </Text>
+                          </View>
+                          <View className={`${item.totalHours > 0 ? 'bg-green-100' : 'bg-gray-100'} px-2 py-1 rounded-md ml-2`}>
+                            <Text className={`${item.totalHours > 0 ? 'text-green-700' : 'text-gray-600'} font-bold text-xs`}>
+                              {item.totalHours}h
+                            </Text>
+                          </View>
+                        </View>
+                        <Text className="text-gray-500 text-sm">{item.address.city} • {item.worker.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
+          </View>
         )}
 
         {viewMode === 'week' && (
           <CalendarList
             horizontal={true}
             pagingEnabled={true}
-            calendarWidth={375} // Podría ser dinámico pero 375 es estándar
+            calendarWidth={375}
             markedDates={markedDates}
             theme={CALENDAR_THEME}
             onDayPress={(day) => {
@@ -369,7 +477,6 @@ export default function CalendarScreen() {
             renderItem={(item: any) => {
               const isPast = isBefore(parseISO(item.date), startOfDay(new Date()));
               const isPending = isPast && item.totalHours === 0;
-
               return (
                 <View className={`bg-white p-4 mr-4 mt-4 rounded-xl shadow-sm border ${isPending && userRole === 'ADMIN' ? 'border-red-400 bg-red-50' : 'border-gray-100'}`}>
                   <View className="flex-row justify-between items-center mb-2">
@@ -397,7 +504,7 @@ export default function CalendarScreen() {
                   <Text className="text-gray-600 mb-4">
                     {item.address.city} • {item.worker.name}
                   </Text>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     className="bg-brand-primary py-2 rounded-lg items-center"
                     onPress={() => setSelectedAssignment(item)}
                   >
@@ -418,16 +525,143 @@ export default function CalendarScreen() {
         )}
       </View>
 
-      {/* FAB for Admins */}
+      {/* FAB: Añadir Asignación (Admin only) */}
       {userRole === 'ADMIN' && (
-        <TouchableOpacity 
-          className="absolute bottom-6 right-6 w-14 h-14 bg-brand-primary rounded-full items-center justify-center shadow-lg shadow-black/30"
+        <TouchableOpacity
+          className="absolute bottom-6 right-6 bg-brand-primary rounded-2xl px-5 h-14 flex-row items-center justify-center shadow-lg shadow-black/30"
           activeOpacity={0.8}
           onPress={handleAddAssignment}
         >
-          <IconSymbol name="plus" size={32} color="white" />
+          <IconSymbol name="plus" size={22} color="white" />
+          <Text className="text-white font-bold text-base ml-2">Áñadir Asignación</Text>
         </TouchableOpacity>
       )}
+
+      {/* ══ MODAL: Añadir Asignación ══ */}
+      <Modal
+        visible={showAddModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <View className="flex-1 justify-end bg-black/60">
+          <View className="bg-white rounded-t-3xl shadow-xl" style={{ maxHeight: '92%' }}>
+            {/* Header */}
+            <View className="flex-row justify-between items-center px-6 pt-6 pb-4 border-b border-gray-100">
+              <Text className="text-2xl font-bold text-gray-900">Nueva Asignación</Text>
+              <TouchableOpacity onPress={() => setShowAddModal(false)} className="p-2 bg-gray-100 rounded-full">
+                <IconSymbol name="xmark" size={20} color="#4B5563" />
+              </TouchableOpacity>
+            </View>
+
+            {isLoadingFormData ? (
+              <View className="py-20 items-center">
+                <ActivityIndicator size="large" color="#0066FF" />
+                <Text className="text-gray-400 mt-4">Cargando datos...</Text>
+              </View>
+            ) : (
+              <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+
+                {/* 1. Worker selector */}
+                <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Trabajador</Text>
+                <View className="flex-row flex-wrap gap-2 mb-6">
+                  {addWorkers.map(w => (
+                    <TouchableOpacity
+                      key={w.id}
+                      onPress={() => setAddWorkerId(w.id)}
+                      className={`px-4 py-2 rounded-full border ${
+                        addWorkerId === w.id ? 'bg-brand-primary border-brand-primary' : 'bg-white border-gray-300'
+                      }`}
+                    >
+                      <Text className={`font-semibold text-sm ${addWorkerId === w.id ? 'text-white' : 'text-gray-700'}`}>
+                        {w.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* 2. Address selector */}
+                <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Sede</Text>
+                <View className="flex-row flex-wrap gap-2 mb-6">
+                  {addAddresses.map(a => (
+                    <TouchableOpacity
+                      key={a.id}
+                      onPress={() => setAddAddressId(a.id)}
+                      className={`px-4 py-2 rounded-full border ${
+                        addAddressId === a.id ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'
+                      }`}
+                    >
+                      <Text className={`font-semibold text-sm ${addAddressId === a.id ? 'text-white' : 'text-gray-700'}`}>
+                        {a.street}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* 3. Date picker using Calendar */}
+                <Text className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Fecha</Text>
+                <TouchableOpacity
+                  onPress={() => setAddShowCalendar(!addShowCalendar)}
+                  className="flex-row items-center justify-between bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 mb-2"
+                >
+                  <View className="flex-row items-center">
+                    <IconSymbol name="calendar" size={20} color="#6B7280" />
+                    <Text className={`ml-3 font-semibold text-base ${addDate ? 'text-gray-900' : 'text-gray-400'}`}>
+                      {addDate || 'Selecciona una fecha'}
+                    </Text>
+                  </View>
+                  <IconSymbol name={addShowCalendar ? 'chevron.up' : 'chevron.down'} size={16} color="#9CA3AF" />
+                </TouchableOpacity>
+                {addShowCalendar && (
+                  <View className="rounded-2xl overflow-hidden border border-gray-200 mb-6">
+                    <Calendar
+                      current={addDate || selectedDate}
+                      onDayPress={(day) => {
+                        setAddDate(day.dateString);
+                        setAddShowCalendar(false);
+                      }}
+                      markedDates={addDate ? { [addDate]: { selected: true, selectedColor: '#0066FF' } } : {}}
+                      theme={CALENDAR_THEME}
+                    />
+                  </View>
+                )}
+
+                {/* Summary */}
+                {addWorkerId && addAddressId && addDate && (
+                  <View className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-6">
+                    <Text className="text-blue-800 font-bold text-sm mb-1">Resumen de la asignación</Text>
+                    <Text className="text-blue-700 text-sm">
+                      👤 {addWorkers.find(w => w.id === addWorkerId)?.name}{`\n`}
+                      📍 {addAddresses.find(a => a.id === addAddressId)?.street}{`\n`}
+                      📅 {addDate}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Submit */}
+                <TouchableOpacity
+                  onPress={handleCreateAssignment}
+                  disabled={isCreating || !addWorkerId || !addAddressId || !addDate}
+                  className={`py-4 rounded-2xl items-center shadow-sm ${
+                    isCreating || !addWorkerId || !addAddressId || !addDate
+                      ? 'bg-gray-200'
+                      : 'bg-brand-primary'
+                  }`}
+                >
+                  {isCreating ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text className={`font-bold text-lg ${
+                      !addWorkerId || !addAddressId || !addDate ? 'text-gray-400' : 'text-white'
+                    }`}>Guardar Asignación</Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* Modal de Detalle de Asignación */}
       <Modal
         visible={!!selectedAssignment}

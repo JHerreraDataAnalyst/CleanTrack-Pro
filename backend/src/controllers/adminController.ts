@@ -76,21 +76,33 @@ export const getAssignments = async (req: Request, res: Response) => {
 // POST /api/admin/assignments
 export const createAssignment = async (req: Request, res: Response) => {
   try {
-    const { userId, addressId, date } = req.body;
+    // Accept both 'workerId' and legacy 'userId' field names
+    const { workerId, userId, addressId, date } = req.body;
+    const workerIdToUse = workerId || userId;
 
-    if (!userId || !addressId || !date) {
-      return res.status(400).json({ error: 'Faltan campos requeridos' });
+    if (!workerIdToUse || !addressId || !date) {
+      return res.status(400).json({ error: 'Faltan campos requeridos: workerId, addressId, date' });
     }
+
+    // Verify the worker exists
+    const worker = await prisma.user.findUnique({ where: { id: workerIdToUse } });
+    if (!worker) {
+      return res.status(404).json({ error: 'Trabajador no encontrado' });
+    }
+
+    // Parse date as UTC midnight to avoid timezone drift
+    const assignmentDate = new Date(`${date}T00:00:00.000Z`);
 
     const newAssignment = await prisma.assignment.create({
       data: {
-        workerId: userId as string,
+        workerId: workerIdToUse,
         addressId: addressId as string,
-        date: new Date(date as string)
+        date: assignmentDate,
       },
       include: {
-        address: true
-      }
+        address: true,
+        worker: { select: { id: true, name: true } },
+      },
     });
 
     res.status(201).json(newAssignment);
@@ -99,6 +111,7 @@ export const createAssignment = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Error al crear asignación' });
   }
 };
+
 
 // DELETE /api/admin/assignments/:id
 export const deleteAssignment = async (req: Request, res: Response) => {

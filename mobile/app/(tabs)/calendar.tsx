@@ -48,6 +48,8 @@ export default function CalendarScreen() {
   const [issueDescription, setIssueDescription] = useState('');
   const [issuePhoto, setIssuePhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isSubmittingIssue, setIsSubmittingIssue] = useState(false);
+  
+  const [isClosingJornada, setIsClosingJornada] = useState(false);
 
   // Cargar las habitaciones predefinidas del sitio cuando se abre el modal
   useEffect(() => {
@@ -222,6 +224,69 @@ export default function CalendarScreen() {
     }
   };
 
+  // --- Cierre de Jornada ---
+  const handleCloseJornada = async (assignment: CalendarAssignment) => {
+    setIsClosingJornada(true);
+    try {
+      // 1. Validar si faltan habitaciones
+      const valResponse = await fetch(`${API_BASE}/worker/assignments/${assignment.id}/validate-closure`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const valData = await valResponse.json();
+
+      if (!valResponse.ok) {
+        throw new Error(valData.error || 'Error al validar el cierre');
+      }
+
+      if (!valData.canClose && valData.missingRooms && valData.missingRooms.length > 0) {
+        const roomNames = valData.missingRooms.map((r: any) => r.name).join(', ');
+        Alert.alert(
+          'Registro Incompleto',
+          `Falta reportar horas en las siguientes áreas:\n\n${roomNames}\n\nPor favor, registra el trabajo antes de finalizar la jornada.`
+        );
+        setIsClosingJornada(false);
+        return;
+      }
+
+      // 2. Confirmar cierre
+      Alert.alert(
+        'Confirmar Cierre',
+        '¿Estás seguro de finalizar la jornada? Una vez cerrada, no podrás añadir más horas ni incidencias.',
+        [
+          { text: 'Cancelar', style: 'cancel', onPress: () => setIsClosingJornada(false) },
+          {
+            text: 'Finalizar',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const closeResponse = await fetch(`${API_BASE}/worker/assignments/${assignment.id}/close`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                const closeData = await closeResponse.json();
+
+                if (!closeResponse.ok) {
+                  throw new Error(closeData.error || 'Error al cerrar jornada');
+                }
+
+                Alert.alert('Jornada Finalizada', 'Buen trabajo. El servicio ha sido marcado como completado.');
+                setSelectedAssignment(null);
+                refetch();
+              } catch (error: any) {
+                Alert.alert('Error', error.message);
+              } finally {
+                setIsClosingJornada(false);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Error de conexión');
+      setIsClosingJornada(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
@@ -312,6 +377,11 @@ export default function CalendarScreen() {
                       {isPending && userRole === 'ADMIN' && (
                         <View className="mr-2">
                           <IconSymbol name="exclamationmark.triangle.fill" size={20} color="#EF4444" />
+                        </View>
+                      )}
+                      {item.status === 'COMPLETED' && (
+                        <View className="mr-2">
+                          <IconSymbol name="checkmark.circle.fill" size={20} color="#10B981" />
                         </View>
                       )}
                       <Text className="text-brand-primary font-bold text-lg flex-1" numberOfLines={1}>
@@ -455,27 +525,53 @@ export default function CalendarScreen() {
                     </TouchableOpacity>
                   ) : (
                     <View>
-                      {/* Eliminado el bloqueo de "Solo Lectura". Todos pueden reportar. */}
-                      <TouchableOpacity 
-                        className="bg-brand-primary py-4 rounded-xl items-center shadow-sm mb-3"
-                        onPress={() => {
-                          setLogHoursAssignment(selectedAssignment);
-                          setSelectedAssignment(null);
-                        }}
-                      >
-                        <Text className="text-white font-bold text-lg">Registrar Trabajo</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        className="bg-amber-500 py-3 rounded-xl items-center shadow-sm flex-row justify-center"
-                        onPress={() => {
-                          setIssueAssignment(selectedAssignment);
-                          setSelectedAssignment(null);
-                          setIssueModalVisible(true);
-                        }}
-                      >
-                        <IconSymbol name="camera.fill" size={18} color="white" />
-                        <Text className="text-white font-bold text-base ml-2">Reportar Incidencia</Text>
-                      </TouchableOpacity>
+                      {selectedAssignment.status === 'COMPLETED' ? (
+                        <View className="bg-green-50 p-4 rounded-xl border border-green-200 items-center mb-4">
+                          <IconSymbol name="checkmark.seal.fill" size={32} color="#10B981" />
+                          <Text className="text-green-800 font-bold text-lg mt-2">Servicio Completado</Text>
+                          <Text className="text-green-700 text-center mt-1">Has finalizado tu jornada para esta dirección. Los registros son de solo lectura.</Text>
+                        </View>
+                      ) : (
+                        <View>
+                          <TouchableOpacity 
+                            className="bg-brand-primary py-4 rounded-xl items-center shadow-sm mb-3"
+                            onPress={() => {
+                              setLogHoursAssignment(selectedAssignment);
+                              setSelectedAssignment(null);
+                            }}
+                          >
+                            <Text className="text-white font-bold text-lg">Registrar Trabajo</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            className="bg-amber-500 py-3 rounded-xl items-center shadow-sm flex-row justify-center mb-6"
+                            onPress={() => {
+                              setIssueAssignment(selectedAssignment);
+                              setSelectedAssignment(null);
+                              setIssueModalVisible(true);
+                            }}
+                          >
+                            <IconSymbol name="camera.fill" size={18} color="white" />
+                            <Text className="text-white font-bold text-base ml-2">Reportar Incidencia</Text>
+                          </TouchableOpacity>
+
+                          <View className="h-px bg-gray-200 w-full mb-6" />
+
+                          <TouchableOpacity 
+                            className={`py-4 rounded-xl items-center shadow-sm flex-row justify-center ${isClosingJornada ? 'bg-green-400' : 'bg-green-600'}`}
+                            onPress={() => handleCloseJornada(selectedAssignment)}
+                            disabled={isClosingJornada}
+                          >
+                            {isClosingJornada ? (
+                              <ActivityIndicator color="white" />
+                            ) : (
+                              <>
+                                <IconSymbol name="checkmark.circle" size={20} color="white" />
+                                <Text className="text-white font-bold text-lg ml-2">Finalizar Jornada</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
                   )}
                 </View>

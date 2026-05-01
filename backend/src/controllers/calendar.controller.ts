@@ -40,7 +40,7 @@ export const getAssignments = async (req: AuthRequest, res: Response) => {
       whereClause.workerId = user.id;
     }
 
-    const assignments = await prisma.assignment.findMany({
+    const queryOptions: any = {
       where: whereClause,
       include: {
         address: true,
@@ -60,7 +60,9 @@ export const getAssignments = async (req: AuthRequest, res: Response) => {
       orderBy: {
         date: 'asc',
       },
-    });
+    };
+
+    const assignments: any[] = await prisma.assignment.findMany(queryOptions);
 
     // Agrupar asignaciones por fecha y calcular total de horas por día
     const groupedData: Record<string, any> = {};
@@ -70,7 +72,7 @@ export const getAssignments = async (req: AuthRequest, res: Response) => {
       const dateKey = format(assignment.date, 'yyyy-MM-dd');
       
       // Calcular horas totales de esta asignación (sumando sus workRecords)
-      const assignmentHours = assignment.workRecords.reduce((sum, record) => sum + record.hours, 0);
+      const assignmentHours = assignment.workRecords.reduce((sum: number, record: any) => sum + record.hours, 0);
 
       if (!groupedData[dateKey]) {
         groupedData[dateKey] = {
@@ -86,6 +88,7 @@ export const getAssignments = async (req: AuthRequest, res: Response) => {
         address: assignment.address,
         worker: assignment.worker,
         date: assignment.date,
+        status: assignment.status,
         totalHours: assignmentHours,
         workRecordsCount: assignment.workRecords.length,
         workRecords: assignment.workRecords,

@@ -9,6 +9,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendar.routes';
 import issueRoutes from './routes/issueRoutes';
+import assignmentRoutes from './routes/assignmentRoutes';
 import { initCronJobs } from './cron/lateReportAlerts';
 
 dotenv.config();
@@ -33,6 +34,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/worker', issueRoutes);
+app.use('/api/worker/assignments', assignmentRoutes);
 
 app.get('/', (req, res) => {
   res.send('Limpieza API is running');

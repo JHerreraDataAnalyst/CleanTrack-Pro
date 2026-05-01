@@ -87,26 +87,28 @@ export default function TabLayout() {
       <Tabs.Screen
         name="calendar"
         options={{
-          title: 'Calendario',
+          title: user.role === 'ADMIN' ? 'Calendario' : 'Mi Día',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
         }}
       />
 
+      {/* Hidden: functionality merged into calendar */}
       <Tabs.Screen
         name="worker"
         options={{
           title: 'Asignaciones',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet.clipboard" color={color} />,
-          href: user.role === 'TRABAJADOR' ? '/(tabs)/worker' : null,
+          href: null,
         }}
       />
 
+      {/* Hidden: site info available in calendar detail modal */}
       <Tabs.Screen
         name="sites"
         options={{
           title: 'Sedes',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="building.2.fill" color={color} />,
-          href: user.role === 'TRABAJADOR' ? '/(tabs)/sites' : null,
+          href: null,
         }}
       />
 

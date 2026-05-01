@@ -10,7 +10,6 @@ export const getMySites = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Falta workerId' });
     }
 
-    // Obtener asignaciones del trabajador para extraer las direcciones
     const assignments = await prisma.assignment.findMany({
       where: { workerId: workerId as string },
       include: {
@@ -18,7 +17,6 @@ export const getMySites = async (req: Request, res: Response) => {
       }
     });
 
-    // Extraer direcciones únicas
     const uniqueAddressesMap = new Map();
     assignments.forEach(assignment => {
       const addr = assignment.address;
@@ -47,25 +45,37 @@ export const getPersonalStats = async (req: Request, res: Response) => {
 
     const now = new Date();
     const targetYear = year ? parseInt(year as string, 10) : now.getFullYear();
-    const targetMonth = month ? parseInt(month as string, 10) : now.getMonth();
+    const targetMonth = month !== undefined ? parseInt(month as string, 10) : now.getMonth();
 
-    const periodStart = new Date(targetYear, targetMonth, 1);
-    const periodEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+    // Use UTC dates to match DB storage (Prisma/Postgres store in UTC)
+    const periodStart = new Date(Date.UTC(targetYear, targetMonth, 1, 0, 0, 0, 0));
+    const periodEnd = new Date(Date.UTC(targetYear, targetMonth + 1, 0, 23, 59, 59, 999));
 
-    // 1. Horas Totales (del mes)
+    console.log(`[Stats] workerId=${workerId} period=${periodStart.toISOString()} to ${periodEnd.toISOString()}`);
+
+    // 1. Horas Totales (del mes) — include isLate explicitly
     const workRecords = await prisma.workRecord.findMany({
       where: {
         assignment: {
           workerId: workerId as string,
           date: { gte: periodStart, lte: periodEnd }
         }
+      },
+      select: {
+        id: true,
+        hours: true,
+        isVerified: true,
+        isLate: true,
+        createdAt: true,
+        roomId: true,
+        assignmentId: true,
       }
     });
 
     const totalHours = workRecords.reduce((sum, r) => sum + r.hours, 0);
 
     // 2. Índice de Puntualidad
-    const lateCount = workRecords.filter((r: any) => r.isLate).length;
+    const lateCount = workRecords.filter(r => r.isLate).length;
     const totalReports = workRecords.length;
     const punctualityIndex = totalReports > 0 
       ? Math.round(((totalReports - lateCount) / totalReports) * 100) 
@@ -80,11 +90,12 @@ export const getPersonalStats = async (req: Request, res: Response) => {
       }
     });
 
-    // 4. Historial Reciente (últimos 5 reportes)
+    // 4. Historial Reciente (últimos 5 reportes del mes seleccionado)
     const recentHistory = await prisma.workRecord.findMany({
       where: {
         assignment: {
-          workerId: workerId as string
+          workerId: workerId as string,
+          date: { gte: periodStart, lte: periodEnd }
         }
       },
       include: {
@@ -102,9 +113,11 @@ export const getPersonalStats = async (req: Request, res: Response) => {
       roomName: r.room.name,
       address: r.assignment.address.street,
       hours: r.hours,
-      date: r.assignment.date,
-      createdAt: r.createdAt
+      date: r.assignment.date.toISOString(),
+      createdAt: r.createdAt.toISOString()
     }));
+
+    console.log(`[Stats] Found ${workRecords.length} records, ${totalHours}h total, ${completedServices} completed`);
 
     res.status(200).json({
       totalHours,

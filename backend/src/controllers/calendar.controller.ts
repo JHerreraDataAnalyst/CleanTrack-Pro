@@ -86,8 +86,9 @@ export const getAssignments = async (req: AuthRequest, res: Response) => {
       groupedData[dateKey].assignments.push({
         id: assignment.id,
         address: assignment.address,
+        addressId: assignment.addressId,
         worker: assignment.worker,
-        date: assignment.date,
+        date: dateKey,
         status: assignment.status,
         totalHours: assignmentHours,
         workRecordsCount: assignment.workRecords.length,

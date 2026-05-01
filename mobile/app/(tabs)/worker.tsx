@@ -236,7 +236,7 @@ export default function DailyAssignmentsScreen() {
                 {selectedDate && (
                   <View className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 mb-8">
                     <Text className="text-lg font-bold text-brand-dark mb-3">
-                      Detalle del {new Date(selectedDate).toLocaleDateString()}
+                      Detalle del {new Date(selectedDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}
                     </Text>
                     {historyData.records.filter(r => new Date(r.date).toISOString().split('T')[0] === selectedDate).length > 0 ? (
                       historyData.records

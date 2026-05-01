@@ -11,12 +11,19 @@ export interface CalendarAssignment {
   address: {
     street: string;
     city: string;
+    instructions: string | null;
   };
   worker: {
     id: string;
     name: string;
   };
   totalHours: number;
+  workRecords: Array<{
+    id: string;
+    roomId: string;
+    hours: number;
+    isVerified: boolean;
+  }>;
 }
 
 export interface DailyData {

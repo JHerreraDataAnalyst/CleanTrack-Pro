@@ -83,6 +83,7 @@ export const getAssignments = async (req: AuthRequest, res: Response) => {
         date: assignment.date,
         totalHours: assignmentHours,
         workRecordsCount: assignment.workRecords.length,
+        workRecords: assignment.workRecords,
       });
     });
 

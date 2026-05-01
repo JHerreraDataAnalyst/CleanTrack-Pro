@@ -1,9 +1,12 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { Calendar, Agenda, CalendarList } from 'react-native-calendars';
-import { useCalendar } from '../../hooks/useCalendar';
+import { useCalendar, CalendarAssignment } from '../../hooks/useCalendar';
 import { CALENDAR_THEME } from '../../constants/calendarTheme';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { isBefore, startOfDay, parseISO } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
@@ -21,6 +24,9 @@ export default function CalendarScreen() {
 
   const queryClient = useQueryClient();
   const router = useRouter();
+
+  // Estado para el modal de detalle
+  const [selectedAssignment, setSelectedAssignment] = useState<CalendarAssignment | null>(null);
 
   const handleAddAssignment = () => {
     // Ejemplo: router.push('/admin/assign-task');
@@ -110,8 +116,11 @@ export default function CalendarScreen() {
                 <Text className="text-gray-600 mb-4">
                   {item.address.city} • {item.worker.name}
                 </Text>
-                <TouchableOpacity className="bg-brand-primary py-2 rounded-lg items-center">
-                  <Text className="text-white font-bold">Registrar trabajo</Text>
+                <TouchableOpacity 
+                  className="bg-brand-primary py-2 rounded-lg items-center"
+                  onPress={() => setSelectedAssignment(item)}
+                >
+                  <Text className="text-white font-bold">Ver Detalles</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -137,6 +146,101 @@ export default function CalendarScreen() {
           <IconSymbol name="plus" size={32} color="white" />
         </TouchableOpacity>
       )}
+      {/* Modal de Detalle de Asignación */}
+      <Modal
+        visible={!!selectedAssignment}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedAssignment(null)}
+      >
+        <View className="flex-1 justify-end bg-black/50">
+          <View className="bg-white rounded-t-3xl p-6 min-h-[50%] shadow-xl">
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-2xl font-bold text-gray-800">Detalles del Servicio</Text>
+              <TouchableOpacity onPress={() => setSelectedAssignment(null)} className="p-2 bg-gray-100 rounded-full">
+                <IconSymbol name="xmark" size={20} color="#4B5563" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedAssignment && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Dirección */}
+                <View className="mb-6">
+                  <Text className="text-sm font-bold text-gray-500 mb-1 uppercase tracking-wider">Dirección</Text>
+                  <Text className="text-lg text-gray-800 font-medium">{selectedAssignment.address.street}</Text>
+                  <Text className="text-base text-gray-600">{selectedAssignment.address.city}</Text>
+                </View>
+
+                {/* Notas / Instrucciones */}
+                <View className="mb-6">
+                  <Text className="text-sm font-bold text-gray-500 mb-1 uppercase tracking-wider">Notas del Servicio</Text>
+                  <View className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                    <Text className="text-blue-800 text-base">
+                      {selectedAssignment.address.instructions || "No hay notas adicionales para este servicio."}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Horario Registrado */}
+                <View className="mb-6">
+                  <Text className="text-sm font-bold text-gray-500 mb-1 uppercase tracking-wider">Horario Registrado</Text>
+                  <View className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    {selectedAssignment.workRecords && selectedAssignment.workRecords.length > 0 ? (
+                      selectedAssignment.workRecords.map((record, index) => (
+                        <View key={record.id} className={`flex-row justify-between items-center ${index > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}`}>
+                          <Text className="text-gray-700 font-medium">Habitación/Área</Text>
+                          <Text className="text-brand-primary font-bold">{record.hours} horas</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text className="text-gray-500 italic">No hay horas registradas aún.</Text>
+                    )}
+                    <View className="mt-3 pt-3 border-t border-gray-300 flex-row justify-between items-center">
+                      <Text className="font-bold text-gray-800">Total</Text>
+                      <Text className="font-bold text-brand-primary text-lg">{selectedAssignment.totalHours} horas</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Acciones */}
+                <View className="mt-4 mb-8">
+                  {userRole === 'ADMIN' ? (
+                    <TouchableOpacity 
+                      className="bg-brand-primary py-4 rounded-xl items-center shadow-sm"
+                      onPress={() => {
+                        console.log('Navegando a editar horas de la asignación:', selectedAssignment.id);
+                        // router.push(`/admin/edit-assignment/${selectedAssignment.id}`);
+                        setSelectedAssignment(null);
+                      }}
+                    >
+                      <Text className="text-white font-bold text-lg">Editar Asignación</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View>
+                      {isBefore(parseISO(selectedAssignment.date), startOfDay(new Date())) ? (
+                        <View className="bg-gray-100 py-4 rounded-xl items-center border border-gray-200">
+                          <Text className="text-gray-500 font-bold text-lg">Servicio Pasado (Solo Lectura)</Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity 
+                          className="bg-brand-primary py-4 rounded-xl items-center shadow-sm"
+                          onPress={() => {
+                            console.log('Navegando a registrar trabajo:', selectedAssignment.id);
+                            // router.push(`/worker/log-hours/${selectedAssignment.id}`);
+                            setSelectedAssignment(null);
+                          }}
+                        >
+                          <Text className="text-white font-bold text-lg">Registrar Trabajo</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, startOfMonth, endOfMonth, addMonths, isBefore } from 'date-fns';
+import { format, startOfMonth, endOfMonth, addMonths, isBefore, startOfDay } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 
 const API_BASE_URL = 'http://192.168.1.137:3000/api/calendar';

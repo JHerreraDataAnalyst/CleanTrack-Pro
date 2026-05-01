@@ -7,8 +7,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { isBefore, startOfDay, parseISO } from 'date-fns';
-import { useRouter } from 'expo-router';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function CalendarScreen() {
   const {

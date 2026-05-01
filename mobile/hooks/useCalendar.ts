@@ -30,21 +30,24 @@ export const useCalendar = () => {
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-  // Definir rango de búsqueda inicial
-  const startDate = format(startOfMonth(new Date()), 'yyyy-MM-dd');
-  const endDate = format(endOfMonth(addMonths(new Date(), 3)), 'yyyy-MM-dd');
+  // Definir rango de búsqueda dinámico basado en un rango amplio (ej: -6 a +6 meses)
+  // para permitir navegar al pasado fluidamente sin cargar toda la base de datos de golpe.
+  // Podrías atar esto al mes visible en el calendario si necesitas más optimización.
+  const startDate = format(startOfMonth(addMonths(new Date(), -6)), 'yyyy-MM-dd');
+  const endDate = format(endOfMonth(addMonths(new Date(), 6)), 'yyyy-MM-dd');
 
   const { data, isLoading, error, refetch } = useQuery<DailyData[]>({
     queryKey: ['calendarAssignments', startDate, endDate, user?.id],
     queryFn: async () => {
-      const response = await fetch(
-        `${API_BASE_URL}/assignments?startDate=${startDate}&endDate=${endDate}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      let url = `${API_BASE_URL}/assignments?startDate=${startDate}&endDate=${endDate}`;
+      if (user?.role === 'TRABAJADOR') {
+        url += `&workerId=${user.id}`;
+      }
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (!response.ok) throw new Error('Error al cargar calendario');
       return response.json();
     },
@@ -95,20 +98,8 @@ export const useCalendar = () => {
     return items;
   }, [data]);
 
-  // Restricciones de rol
-  const minDate = useMemo(() => {
-    if (user?.role === 'TRABAJADOR') {
-      return format(startOfMonth(new Date()), 'yyyy-MM-dd');
-    }
-    return undefined; // Admin puede ver todo el pasado
-  }, [user]);
+  // Ya no hay restricciones de minDate para ningún rol (Trabajador puede ver historial)
 
-  const isPastDateRestricted = (dateString: string) => {
-    if (user?.role !== 'TRABAJADOR') return false;
-    const date = new Date(dateString);
-    const startOfCurrent = startOfMonth(new Date());
-    return isBefore(date, startOfCurrent);
-  };
 
   return {
     viewMode,
@@ -120,8 +111,6 @@ export const useCalendar = () => {
     error,
     markedDates,
     agendaItems,
-    minDate,
-    isPastDateRestricted,
     userRole: user?.role,
     refetch,
   };

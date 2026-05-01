@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'rea
 import { Calendar, Agenda, CalendarList } from 'react-native-calendars';
 import { useCalendar } from '../../hooks/useCalendar';
 import { CALENDAR_THEME } from '../../constants/calendarTheme';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function CalendarScreen() {
@@ -14,10 +16,18 @@ export default function CalendarScreen() {
     isLoading,
     markedDates,
     agendaItems,
-    minDate,
     userRole,
-    isPastDateRestricted
   } = useCalendar();
+
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  const handleAddAssignment = () => {
+    // Ejemplo: router.push('/admin/assign-task');
+    // Para invalidar el caché después de asignar una tarea exitosamente:
+    // queryClient.invalidateQueries({ queryKey: ['calendarAssignments'] });
+    console.log('Navegando a crear asignación...');
+  };
 
   if (isLoading) {
     return (
@@ -52,14 +62,7 @@ export default function CalendarScreen() {
         </View>
       </View>
 
-      {/* Info Banner for Workers */}
-      {userRole === 'TRABAJADOR' && (
-        <View className="bg-blue-50 px-4 py-2 border-b border-blue-100">
-          <Text className="text-blue-700 text-xs text-center font-medium">
-            Solo se muestran asignaciones del mes actual en adelante.
-          </Text>
-        </View>
-      )}
+
 
       {/* Calendar Views */}
       <View className="flex-1">
@@ -68,7 +71,6 @@ export default function CalendarScreen() {
             current={selectedDate}
             onDayPress={(day) => setSelectedDate(day.dateString)}
             markedDates={markedDates}
-            minDate={minDate}
             theme={CALENDAR_THEME}
             enableSwipeMonths={true}
             markingType={'custom'}
@@ -81,7 +83,6 @@ export default function CalendarScreen() {
             pagingEnabled={true}
             calendarWidth={375} // Podría ser dinámico pero 375 es estándar
             markedDates={markedDates}
-            minDate={minDate}
             theme={CALENDAR_THEME}
             onDayPress={(day) => {
               setSelectedDate(day.dateString);
@@ -131,6 +132,7 @@ export default function CalendarScreen() {
         <TouchableOpacity 
           className="absolute bottom-6 right-6 w-14 h-14 bg-brand-primary rounded-full items-center justify-center shadow-lg shadow-black/30"
           activeOpacity={0.8}
+          onPress={handleAddAssignment}
         >
           <IconSymbol name="plus" size={32} color="white" />
         </TouchableOpacity>

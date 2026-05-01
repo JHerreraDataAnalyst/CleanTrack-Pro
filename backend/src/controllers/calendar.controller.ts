@@ -25,13 +25,7 @@ export const getAssignments = async (req: AuthRequest, res: Response) => {
       queryEndDate.setHours(23, 59, 59, 999);
     }
 
-    // Regla de negocio: TRABAJADOR no puede consultar meses anteriores al mes actual
-    if (user.role === 'TRABAJADOR') {
-      const startOfCurrentMonth = startOfMonth(now);
-      if (isBefore(queryStartDate, startOfCurrentMonth)) {
-        queryStartDate = startOfCurrentMonth;
-      }
-    }
+    // Regla de negocio: TRABAJADOR puede consultar meses anteriores (historial sin restricciones)
 
     // Construir la consulta a la BD
     const whereClause: any = {

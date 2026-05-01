@@ -5,7 +5,7 @@ import prisma from '../lib/prisma';
 // Devuelve todas las habitaciones predefinidas para una dirección específica
 export const getRoomsByAddress = async (req: Request, res: Response) => {
   try {
-    const { addressId } = req.params;
+    const addressId = req.params.addressId as string;
 
     const rooms = await prisma.room.findMany({
       where: { addressId },
@@ -71,7 +71,7 @@ export const createAddress = async (req: Request, res: Response) => {
 // PATCH /api/addresses/:id - Editar dirección y sincronizar sus habitaciones
 export const updateAddress = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { street, city, state, zipCode, instructions, contactPhone, rooms } = req.body;
 
     const updatedAddress = await prisma.$transaction(async (tx) => {
@@ -91,7 +91,7 @@ export const updateAddress = async (req: Request, res: Response) => {
       // 2. Si se envía una nueva lista de habitaciones, sincronizarla.
       // Solo añadimos nuevas. NO eliminamos las existentes para no romper WorkRecords ya creados.
       if (Array.isArray(rooms) && rooms.length > 0) {
-        const existingRooms = await tx.room.findMany({ where: { addressId: id } });
+        const existingRooms = await tx.room.findMany({ where: { addressId: id as string } });
         const existingNames = new Set(existingRooms.map((r) => r.name.toLowerCase()));
 
         const newRoomNames = (rooms as string[])
@@ -109,7 +109,7 @@ export const updateAddress = async (req: Request, res: Response) => {
       }
 
       return tx.address.findUnique({
-        where: { id },
+        where: { id: id as string },
         include: { rooms: { orderBy: { name: 'asc' } } },
       });
     });

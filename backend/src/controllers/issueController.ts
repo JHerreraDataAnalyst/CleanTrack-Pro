@@ -80,7 +80,7 @@ export const createIssue = async (req: Request, res: Response) => {
 // Obtener todas las incidencias de un WorkRecord
 export const getIssuesByWorkRecord = async (req: Request, res: Response) => {
   try {
-    const { workRecordId } = req.params;
+    const workRecordId = req.params.workRecordId as string;
 
     const issues = await prisma.issue.findMany({
       where: { workRecordId },

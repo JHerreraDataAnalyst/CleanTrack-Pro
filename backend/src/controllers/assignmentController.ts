@@ -5,9 +5,9 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 // GET /api/worker/assignments/:id/validate-closure
 export const validateClosure = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
-    const assignment = await prisma.assignment.findUnique({
+    const assignment: any = await prisma.assignment.findUnique({
       where: { id },
       include: {
         address: {
@@ -31,10 +31,10 @@ export const validateClosure = async (req: AuthRequest, res: Response) => {
     const workRecords = assignment.workRecords;
 
     // Obtener los IDs de las habitaciones que ya tienen un WorkRecord
-    const reportedRoomIds = new Set(workRecords.map((wr) => wr.roomId));
+    const reportedRoomIds = new Set(workRecords.map((wr: any) => wr.roomId));
 
     // Filtrar las habitaciones esperadas que NO están en los reportedRoomIds
-    const missingRooms = expectedRooms.filter((room) => !reportedRoomIds.has(room.id));
+    const missingRooms = expectedRooms.filter((room: any) => !reportedRoomIds.has(room.id));
 
     // Regla: Si hay habitaciones esperadas, se deben reportar todas.
     // Si la dirección no tiene habitaciones predefinidas (expectedRooms.length === 0),
@@ -64,9 +64,9 @@ export const validateClosure = async (req: AuthRequest, res: Response) => {
 // POST /api/worker/assignments/:id/close
 export const closeAssignment = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
-    const assignment = await prisma.assignment.findUnique({
+    const assignment: any = await prisma.assignment.findUnique({
       where: { id },
       include: {
         worker: true,
@@ -83,7 +83,7 @@ export const closeAssignment = async (req: AuthRequest, res: Response) => {
     }
 
     // Actualizar el estado a COMPLETED
-    const updatedAssignment = await prisma.assignment.update({
+    const updatedAssignment = await (prisma as any).assignment.update({
       where: { id },
       data: { status: 'COMPLETED' },
     });

@@ -30,12 +30,13 @@ initCronJobs();
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/work-records', workRecordRoutes);
-app.use('/api/workers', workerRoutes);
+app.use('/api/workers', workerRoutes);       // plural — for sites.tsx
+app.use('/api/worker', workerRoutes);        // singular — for profile.tsx stats
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/calendar', calendarRoutes);
-app.use('/api/worker', issueRoutes);
 app.use('/api/worker/assignments', assignmentRoutes);
+app.use('/api/worker', issueRoutes);         // issue routes last to avoid conflicts
 
 // Web App Compatibility Routes
 app.get('/api/stats', webDashboard.getStats);

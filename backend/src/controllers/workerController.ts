@@ -44,22 +44,28 @@ export const getPersonalStats = async (req: Request, res: Response) => {
     }
 
     const now = new Date();
-    const targetYear = year ? parseInt(year as string, 10) : now.getFullYear();
+    const targetYear  = year  ? parseInt(year  as string, 10) : now.getFullYear();
+    // month is 0-based index (0 = January … 11 = December)
     const targetMonth = month !== undefined ? parseInt(month as string, 10) : now.getMonth();
 
-    // Use UTC dates to match DB storage (Prisma/Postgres store in UTC)
-    const periodStart = new Date(Date.UTC(targetYear, targetMonth, 1, 0, 0, 0, 0));
-    const periodEnd = new Date(Date.UTC(targetYear, targetMonth + 1, 0, 23, 59, 59, 999));
+    // Build a UTC-safe date range so the filter matches Postgres timestamptz values
+    // regardless of the server's local timezone.
+    // Day 0 of (targetMonth + 1) === last day of targetMonth  ✓
+    const periodStart = new Date(Date.UTC(targetYear, targetMonth,     1,  0,  0,  0,   0));
+    const periodEnd   = new Date(Date.UTC(targetYear, targetMonth + 1, 0, 23, 59, 59, 999));
 
-    console.log(`[Stats] workerId=${workerId} period=${periodStart.toISOString()} to ${periodEnd.toISOString()}`);
+    console.log(
+      `[Stats] workerId=${workerId} | month=${targetMonth} year=${targetYear}` +
+      ` | range ${periodStart.toISOString()} → ${periodEnd.toISOString()}`
+    );
 
-    // 1. Horas Totales (del mes) — include isLate explicitly
+    // ── 1. Work records in the period ────────────────────────────────────
     const workRecords = await prisma.workRecord.findMany({
       where: {
         assignment: {
           workerId: workerId as string,
-          date: { gte: periodStart, lte: periodEnd }
-        }
+          date: { gte: periodStart, lte: periodEnd },
+        },
       },
       select: {
         id: true,
@@ -69,68 +75,67 @@ export const getPersonalStats = async (req: Request, res: Response) => {
         createdAt: true,
         roomId: true,
         assignmentId: true,
-      }
+      },
     });
 
     const totalHours = workRecords.reduce((sum, r) => sum + r.hours, 0);
 
-    // 2. Índice de Puntualidad
-    const lateCount = workRecords.filter(r => r.isLate).length;
+    // ── 2. Punctuality index ─────────────────────────────────────────────
     const totalReports = workRecords.length;
-    const punctualityIndex = totalReports > 0 
-      ? Math.round(((totalReports - lateCount) / totalReports) * 100) 
-      : 100;
+    const lateCount    = workRecords.filter(r => r.isLate).length;
+    const punctualityIndex =
+      totalReports > 0
+        ? Math.round(((totalReports - lateCount) / totalReports) * 100)
+        : 100; // default to 100 % when no data for the period
 
-    // 3. Servicios Completados (status === 'COMPLETED')
-    const completedServices = await (prisma as any).assignment.count({
+    // ── 3. Completed services ────────────────────────────────────────────
+    const completedServices = await prisma.assignment.count({
       where: {
         workerId: workerId as string,
-        status: 'COMPLETED',
-        date: { gte: periodStart, lte: periodEnd }
-      }
+        status:   'COMPLETED',
+        date:     { gte: periodStart, lte: periodEnd },
+      },
     });
 
-    // 4. Historial Reciente (últimos 5 reportes del mes seleccionado)
-    const recentHistory = await prisma.workRecord.findMany({
+    // ── 4. Recent history (last 5 work records in the period) ────────────
+    const recentRecords = await prisma.workRecord.findMany({
       where: {
         assignment: {
           workerId: workerId as string,
-          date: { gte: periodStart, lte: periodEnd }
-        }
+          date: { gte: periodStart, lte: periodEnd },
+        },
       },
       include: {
         room: true,
-        assignment: {
-          include: { address: true }
-        }
+        assignment: { include: { address: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: 5
+      take: 5,
     });
 
-    const formattedHistory = recentHistory.map(r => ({
-      id: r.id,
-      roomName: r.room.name,
-      address: r.assignment.address.street,
-      hours: r.hours,
-      date: r.assignment.date.toISOString(),
-      createdAt: r.createdAt.toISOString()
+    const recentHistory = recentRecords.map(r => ({
+      id:        r.id,
+      roomName:  r.room.name,
+      address:   r.assignment.address.street,
+      hours:     r.hours,
+      date:      r.assignment.date.toISOString(),
+      createdAt: r.createdAt.toISOString(),
     }));
 
-    console.log(`[Stats] Found ${workRecords.length} records, ${totalHours}h total, ${completedServices} completed`);
+    console.log(
+      `[Stats] result → ${workRecords.length} records | ${totalHours}h | ${completedServices} completed`
+    );
 
-    res.status(200).json({
+    return res.status(200).json({
       totalHours,
       punctualityIndex,
       completedServices,
-      recentHistory: formattedHistory,
-      period: {
-        month: targetMonth,
-        year: targetYear
-      }
+      recentHistory,
+      period: { month: targetMonth, year: targetYear },
     });
+
   } catch (error) {
     console.error('Error getPersonalStats:', error);
-    res.status(500).json({ error: 'Error al obtener estadísticas personales' });
+    return res.status(500).json({ error: 'Error al obtener estadísticas personales' });
   }
 };

@@ -50,7 +50,12 @@ export const getAssignments = async (req: AuthRequest, res: Response) => {
             name: true,
           },
         },
-        workRecords: true,
+        workRecords: {
+          include: {
+            room: true,
+            issues: true,
+          },
+        },
       },
       orderBy: {
         date: 'asc',

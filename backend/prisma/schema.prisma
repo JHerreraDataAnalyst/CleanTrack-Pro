@@ -77,6 +77,7 @@ model WorkRecord {
   isLate       Boolean    @default(false)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  issues       Issue[]
 }
 
 model Incident {
@@ -98,3 +99,13 @@ model Notification {
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 }
+
+model Issue {
+  id            String     @id @default(uuid())
+  description   String
+  photoUrl      String?
+  workRecordId  String
+  workRecord    WorkRecord @relation(fields: [workRecordId], references: [id], onDelete: Cascade)
+  createdAt     DateTime   @default(now())
+}
+

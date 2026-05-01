@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, TextInput, Alert, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, TextInput, Alert, Switch, Image } from 'react-native';
 import { Calendar, Agenda, CalendarList } from 'react-native-calendars';
 import { useCalendar, CalendarAssignment } from '../../hooks/useCalendar';
 import { CALENDAR_THEME } from '../../constants/calendarTheme';
@@ -8,8 +8,10 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { isBefore, startOfDay, parseISO } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
+import * as ImagePicker from 'expo-image-picker';
 
 const API_BASE = 'http://192.168.1.137:3000/api';
+const BACKEND_URL = 'http://192.168.1.137:3000';
 
 export default function CalendarScreen() {
   const {
@@ -39,6 +41,13 @@ export default function CalendarScreen() {
   const [siteRooms, setSiteRooms] = useState<Array<{ id: string; name: string }>>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Estado para el modal de incidencias
+  const [issueModalVisible, setIssueModalVisible] = useState(false);
+  const [issueAssignment, setIssueAssignment] = useState<CalendarAssignment | null>(null);
+  const [issueDescription, setIssueDescription] = useState('');
+  const [issuePhoto, setIssuePhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [isSubmittingIssue, setIsSubmittingIssue] = useState(false);
 
   // Cargar las habitaciones predefinidas del sitio cuando se abre el modal
   useEffect(() => {
@@ -114,6 +123,102 @@ export default function CalendarScreen() {
       Alert.alert('Error', error.message || 'Hubo un problema al registrar las horas.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // --- Incidencias ---
+  const pickImage = async () => {
+    const permResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permResult.granted) {
+      Alert.alert('Permiso denegado', 'Necesitamos acceso a tu cámara para reportar incidencias.');
+      return;
+    }
+
+    Alert.alert('Adjuntar Foto', 'Elige una opción', [
+      {
+        text: 'Cámara',
+        onPress: async () => {
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            quality: 0.7,
+            allowsEditing: true,
+          });
+          if (!result.canceled && result.assets[0]) {
+            setIssuePhoto(result.assets[0]);
+          }
+        },
+      },
+      {
+        text: 'Galería',
+        onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 0.7,
+            allowsEditing: true,
+          });
+          if (!result.canceled && result.assets[0]) {
+            setIssuePhoto(result.assets[0]);
+          }
+        },
+      },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
+
+  const handleIssueSubmit = async () => {
+    if (!issueAssignment || !issueDescription.trim()) {
+      Alert.alert('Error', 'Por favor escribe una descripción de la incidencia.');
+      return;
+    }
+
+    // Necesitamos un workRecordId. Si la asignación ya tiene registros, usamos el primero.
+    // Si no, avisamos que primero registre horas.
+    const firstRecord = issueAssignment.workRecords?.[0];
+    if (!firstRecord) {
+      Alert.alert('Atención', 'Primero debes registrar horas de trabajo antes de reportar una incidencia.');
+      return;
+    }
+
+    setIsSubmittingIssue(true);
+    try {
+      const formData = new FormData();
+      formData.append('workRecordId', firstRecord.id);
+      formData.append('description', issueDescription);
+
+      if (issuePhoto) {
+        const filename = issuePhoto.uri.split('/').pop() || 'photo.jpg';
+        const match = /\.([\w]+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        formData.append('photo', {
+          uri: issuePhoto.uri,
+          name: filename,
+          type,
+        } as any);
+      }
+
+      const response = await fetch(`${API_BASE}/worker/issues`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Error al reportar incidencia');
+      }
+
+      Alert.alert('Éxito', 'Incidencia reportada correctamente. El administrador será notificado.');
+      setIssueModalVisible(false);
+      setIssueDescription('');
+      setIssuePhoto(null);
+      setIssueAssignment(null);
+      refetch();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'No se pudo enviar la incidencia.');
+    } finally {
+      setIsSubmittingIssue(false);
     }
   };
 
@@ -293,10 +398,37 @@ export default function CalendarScreen() {
                   <Text className="text-sm font-bold text-gray-500 mb-1 uppercase tracking-wider">Horario Registrado</Text>
                   <View className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                     {selectedAssignment.workRecords && selectedAssignment.workRecords.length > 0 ? (
-                      selectedAssignment.workRecords.map((record, index) => (
-                        <View key={record.id} className={`flex-row justify-between items-center ${index > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}`}>
-                          <Text className="text-gray-700 font-medium">Habitación/Área</Text>
-                          <Text className="text-brand-primary font-bold">{record.hours} horas</Text>
+                      selectedAssignment.workRecords.map((record: any, index: number) => (
+                        <View key={record.id} className={`${index > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}`}>
+                          <View className="flex-row justify-between items-center">
+                            <View className="flex-row items-center flex-1">
+                              <Text className="text-gray-700 font-medium">{record.room?.name || 'Habitación'}</Text>
+                              {record.issues && record.issues.length > 0 && (
+                                <View className="ml-2 bg-amber-100 px-2 py-0.5 rounded-full flex-row items-center">
+                                  <IconSymbol name="exclamationmark.triangle.fill" size={12} color="#F59E0B" />
+                                  <Text className="text-amber-700 text-xs ml-1 font-bold">{record.issues.length}</Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text className="text-brand-primary font-bold">{record.hours} h</Text>
+                          </View>
+                          {/* Mostrar incidencias al Admin */}
+                          {userRole === 'ADMIN' && record.issues && record.issues.length > 0 && (
+                            <View className="mt-2">
+                              {record.issues.map((issue: any) => (
+                                <View key={issue.id} className="bg-red-50 p-3 rounded-lg border border-red-100 mt-1">
+                                  <Text className="text-red-800 font-semibold text-sm">{issue.description}</Text>
+                                  {issue.photoUrl && (
+                                    <Image
+                                      source={{ uri: `${BACKEND_URL}${issue.photoUrl}` }}
+                                      className="w-full h-40 rounded-lg mt-2"
+                                      resizeMode="cover"
+                                    />
+                                  )}
+                                </View>
+                              ))}
+                            </View>
+                          )}
                         </View>
                       ))
                     ) : (
@@ -325,13 +457,24 @@ export default function CalendarScreen() {
                     <View>
                       {/* Eliminado el bloqueo de "Solo Lectura". Todos pueden reportar. */}
                       <TouchableOpacity 
-                        className="bg-brand-primary py-4 rounded-xl items-center shadow-sm"
+                        className="bg-brand-primary py-4 rounded-xl items-center shadow-sm mb-3"
                         onPress={() => {
                           setLogHoursAssignment(selectedAssignment);
                           setSelectedAssignment(null);
                         }}
                       >
                         <Text className="text-white font-bold text-lg">Registrar Trabajo</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        className="bg-amber-500 py-3 rounded-xl items-center shadow-sm flex-row justify-center"
+                        onPress={() => {
+                          setIssueAssignment(selectedAssignment);
+                          setSelectedAssignment(null);
+                          setIssueModalVisible(true);
+                        }}
+                      >
+                        <IconSymbol name="camera.fill" size={18} color="white" />
+                        <Text className="text-white font-bold text-base ml-2">Reportar Incidencia</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -448,6 +591,82 @@ export default function CalendarScreen() {
                   </TouchableOpacity>
                 </>
               )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      {/* Modal de Reporte de Incidencia */}
+      <Modal
+        visible={issueModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setIssueModalVisible(false);
+          setIssueDescription('');
+          setIssuePhoto(null);
+        }}
+      >
+        <View className="flex-1 justify-center bg-black/50 p-4">
+          <View className="bg-white rounded-3xl p-6 shadow-xl">
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-2xl font-bold text-gray-800">Reportar Incidencia</Text>
+              <TouchableOpacity onPress={() => { setIssueModalVisible(false); setIssueDescription(''); setIssuePhoto(null); }} className="p-2 bg-gray-100 rounded-full">
+                <IconSymbol name="xmark" size={20} color="#4B5563" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text className="text-gray-600 mb-4">
+                Describe el problema encontrado y adjunta una foto como evidencia.
+              </Text>
+
+              <Text className="text-xs text-gray-500 mb-1 font-bold ml-1 uppercase">Descripción</Text>
+              <TextInput
+                className="bg-gray-100 p-4 rounded-xl text-gray-800 border border-gray-200 mb-4"
+                placeholder="Ej. Vidrio roto en ventana, material faltante..."
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                value={issueDescription}
+                onChangeText={setIssueDescription}
+              />
+
+              <Text className="text-xs text-gray-500 mb-2 font-bold ml-1 uppercase">Foto (Opcional)</Text>
+              {issuePhoto ? (
+                <View className="mb-4">
+                  <Image
+                    source={{ uri: issuePhoto.uri }}
+                    className="w-full h-48 rounded-xl"
+                    resizeMode="cover"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setIssuePhoto(null)}
+                    className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full"
+                  >
+                    <IconSymbol name="xmark" size={14} color="white" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  className="border-2 border-dashed border-gray-300 py-8 rounded-xl items-center mb-4"
+                  onPress={pickImage}
+                >
+                  <IconSymbol name="camera.fill" size={32} color="#9CA3AF" />
+                  <Text className="text-gray-500 font-medium mt-2">Tomar foto o elegir de galería</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                className={`py-4 rounded-xl items-center shadow-sm ${isSubmittingIssue ? 'bg-amber-300' : 'bg-amber-500'}`}
+                onPress={handleIssueSubmit}
+                disabled={isSubmittingIssue}
+              >
+                {isSubmittingIssue ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="text-white font-bold text-lg">Enviar Incidencia</Text>
+                )}
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, TextInput, Alert, Switch } from 'react-native';
 import { Calendar, Agenda, CalendarList } from 'react-native-calendars';
 import { useCalendar, CalendarAssignment } from '../../hooks/useCalendar';
 import { CALENDAR_THEME } from '../../constants/calendarTheme';
@@ -18,19 +18,70 @@ export default function CalendarScreen() {
     markedDates,
     agendaItems,
     userRole,
+    showPendingOnly,
+    setShowPendingOnly,
+    refetch,
   } = useCalendar();
 
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { token } = useAuth(); // Needed for the API call
 
   // Estado para el modal de detalle
   const [selectedAssignment, setSelectedAssignment] = useState<CalendarAssignment | null>(null);
 
+  // Estado para el modal de registro de trabajo
+  const [logHoursAssignment, setLogHoursAssignment] = useState<CalendarAssignment | null>(null);
+  const [roomLogs, setRoomLogs] = useState([{ roomName: '', hours: '' }]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleAddAssignment = () => {
-    // Ejemplo: router.push('/admin/assign-task');
-    // Para invalidar el caché después de asignar una tarea exitosamente:
-    // queryClient.invalidateQueries({ queryKey: ['calendarAssignments'] });
     console.log('Navegando a crear asignación...');
+  };
+
+  const handleLogHoursSubmit = async () => {
+    if (!logHoursAssignment || !token) return;
+    
+    // Validate
+    for (const log of roomLogs) {
+      if (!log.roomName.trim() || !log.hours.trim() || isNaN(Number(log.hours))) {
+        Alert.alert('Error', 'Por favor completa todos los campos correctamente con valores numéricos para las horas.');
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Enviar cada registro
+      for (const log of roomLogs) {
+        const response = await fetch(`http://192.168.1.137:3000/api/work-records`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            assignmentId: logHoursAssignment.id,
+            roomName: log.roomName,
+            hours: Number(log.hours),
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Error al guardar registro');
+        }
+      }
+
+      Alert.alert('Éxito', 'Horas registradas correctamente.');
+      setLogHoursAssignment(null);
+      setRoomLogs([{ roomName: '', hours: '' }]);
+      refetch(); // Refrescar el calendario
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Hubo un problema al registrar las horas.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isLoading) {
@@ -66,6 +117,19 @@ export default function CalendarScreen() {
         </View>
       </View>
 
+      {/* Admin Filter */}
+      {userRole === 'ADMIN' && viewMode === 'day' && (
+        <View className="flex-row justify-between items-center px-4 py-2 bg-red-50 border-b border-red-100">
+          <Text className="text-red-800 font-bold">Ver Pendientes de Reporte</Text>
+          <Switch 
+            value={showPendingOnly}
+            onValueChange={setShowPendingOnly}
+            trackColor={{ false: '#D1D5DB', true: '#FCA5A5' }}
+            thumbColor={showPendingOnly ? '#EF4444' : '#f4f3f4'}
+          />
+        </View>
+      )}
+
 
 
       {/* Calendar Views */}
@@ -99,29 +163,41 @@ export default function CalendarScreen() {
           <Agenda
             items={agendaItems}
             selected={selectedDate}
-            renderItem={(item: any) => (
-              <View className="bg-white p-4 mr-4 mt-4 rounded-xl shadow-sm border border-gray-100">
-                <View className="flex-row justify-between items-center mb-2">
-                  <Text className="text-brand-primary font-bold text-lg">
-                    {item.address.street}
-                  </Text>
-                  <View className="bg-green-100 px-2 py-1 rounded-md">
-                    <Text className="text-green-700 font-bold text-xs">
-                      {item.totalHours}h
-                    </Text>
+            renderItem={(item: any) => {
+              const isPast = isBefore(parseISO(item.date), startOfDay(new Date()));
+              const isPending = isPast && item.totalHours === 0;
+
+              return (
+                <View className={`bg-white p-4 mr-4 mt-4 rounded-xl shadow-sm border ${isPending && userRole === 'ADMIN' ? 'border-red-400 bg-red-50' : 'border-gray-100'}`}>
+                  <View className="flex-row justify-between items-center mb-2">
+                    <View className="flex-row items-center flex-1">
+                      {isPending && userRole === 'ADMIN' && (
+                        <View className="mr-2">
+                          <IconSymbol name="exclamationmark.triangle.fill" size={20} color="#EF4444" />
+                        </View>
+                      )}
+                      <Text className="text-brand-primary font-bold text-lg flex-1" numberOfLines={1}>
+                        {item.address.street}
+                      </Text>
+                    </View>
+                    <View className={`${item.totalHours > 0 ? 'bg-green-100' : 'bg-gray-100'} px-2 py-1 rounded-md`}>
+                      <Text className={`${item.totalHours > 0 ? 'text-green-700' : 'text-gray-600'} font-bold text-xs`}>
+                        {item.totalHours}h
+                      </Text>
+                    </View>
                   </View>
+                  <Text className="text-gray-600 mb-4">
+                    {item.address.city} • {item.worker.name}
+                  </Text>
+                  <TouchableOpacity 
+                    className="bg-brand-primary py-2 rounded-lg items-center"
+                    onPress={() => setSelectedAssignment(item)}
+                  >
+                    <Text className="text-white font-bold">Ver Detalles</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text className="text-gray-600 mb-4">
-                  {item.address.city} • {item.worker.name}
-                </Text>
-                <TouchableOpacity 
-                  className="bg-brand-primary py-2 rounded-lg items-center"
-                  onPress={() => setSelectedAssignment(item)}
-                >
-                  <Text className="text-white font-bold">Ver Detalles</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+              );
+            }}
             renderEmptyDate={() => (
               <View className="flex-1 justify-center items-center p-10 opacity-40">
                 <IconSymbol name="calendar.badge.exclamationmark" size={48} color="#9CA3AF" />
@@ -207,7 +283,6 @@ export default function CalendarScreen() {
                       className="bg-brand-primary py-4 rounded-xl items-center shadow-sm"
                       onPress={() => {
                         console.log('Navegando a editar horas de la asignación:', selectedAssignment.id);
-                        // router.push(`/admin/edit-assignment/${selectedAssignment.id}`);
                         setSelectedAssignment(null);
                       }}
                     >
@@ -215,27 +290,96 @@ export default function CalendarScreen() {
                     </TouchableOpacity>
                   ) : (
                     <View>
-                      {isBefore(parseISO(selectedAssignment.date), startOfDay(new Date())) ? (
-                        <View className="bg-gray-100 py-4 rounded-xl items-center border border-gray-200">
-                          <Text className="text-gray-500 font-bold text-lg">Servicio Pasado (Solo Lectura)</Text>
-                        </View>
-                      ) : (
-                        <TouchableOpacity 
-                          className="bg-brand-primary py-4 rounded-xl items-center shadow-sm"
-                          onPress={() => {
-                            console.log('Navegando a registrar trabajo:', selectedAssignment.id);
-                            // router.push(`/worker/log-hours/${selectedAssignment.id}`);
-                            setSelectedAssignment(null);
-                          }}
-                        >
-                          <Text className="text-white font-bold text-lg">Registrar Trabajo</Text>
-                        </TouchableOpacity>
-                      )}
+                      {/* Eliminado el bloqueo de "Solo Lectura". Todos pueden reportar. */}
+                      <TouchableOpacity 
+                        className="bg-brand-primary py-4 rounded-xl items-center shadow-sm"
+                        onPress={() => {
+                          setLogHoursAssignment(selectedAssignment);
+                          setSelectedAssignment(null);
+                        }}
+                      >
+                        <Text className="text-white font-bold text-lg">Registrar Trabajo</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </View>
               </ScrollView>
             )}
+          </View>
+        </View>
+      </Modal>
+      {/* Modal de Registro de Horas (Multi-Habitación) */}
+      <Modal
+        visible={!!logHoursAssignment}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setLogHoursAssignment(null)}
+      >
+        <View className="flex-1 justify-center bg-black/50 p-4">
+          <View className="bg-white rounded-3xl p-6 shadow-xl max-h-[90%]">
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-2xl font-bold text-gray-800">Registrar Horas</Text>
+              <TouchableOpacity onPress={() => setLogHoursAssignment(null)} className="p-2 bg-gray-100 rounded-full">
+                <IconSymbol name="xmark" size={20} color="#4B5563" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text className="text-gray-600 mb-4">
+                Ingresa el nombre de la habitación o área y el tiempo total dedicado. Si trabajaste en varias áreas, añade más filas.
+              </Text>
+
+              {roomLogs.map((log, index) => (
+                <View key={index} className="flex-row mb-4 space-x-2">
+                  <View className="flex-1">
+                    <Text className="text-xs text-gray-500 mb-1 font-bold ml-1">ÁREA / HABITACIÓN</Text>
+                    <TextInput 
+                      className="bg-gray-100 p-3 rounded-xl text-gray-800 border border-gray-200"
+                      placeholder="Ej. Cocina, Baño Principal..."
+                      value={log.roomName}
+                      onChangeText={(val) => {
+                        const newLogs = [...roomLogs];
+                        newLogs[index].roomName = val;
+                        setRoomLogs(newLogs);
+                      }}
+                    />
+                  </View>
+                  <View className="w-24">
+                    <Text className="text-xs text-gray-500 mb-1 font-bold ml-1">HORAS</Text>
+                    <TextInput 
+                      className="bg-gray-100 p-3 rounded-xl text-gray-800 border border-gray-200 text-center"
+                      placeholder="Ej. 2.5"
+                      keyboardType="numeric"
+                      value={log.hours}
+                      onChangeText={(val) => {
+                        const newLogs = [...roomLogs];
+                        newLogs[index].hours = val;
+                        setRoomLogs(newLogs);
+                      }}
+                    />
+                  </View>
+                </View>
+              ))}
+
+              <TouchableOpacity 
+                className="py-3 border-2 border-dashed border-gray-300 rounded-xl items-center mb-6"
+                onPress={() => setRoomLogs([...roomLogs, { roomName: '', hours: '' }])}
+              >
+                <Text className="text-gray-500 font-bold">+ Añadir otra habitación</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                className={`py-4 rounded-xl items-center shadow-sm ${isSubmitting ? 'bg-blue-300' : 'bg-brand-primary'}`}
+                onPress={handleLogHoursSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="text-white font-bold text-lg">Guardar Registro</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>

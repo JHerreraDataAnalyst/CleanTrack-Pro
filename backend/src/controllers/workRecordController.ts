@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
+import { isAfter, endOfDay } from 'date-fns';
 
 export const getWorkRecords = async (req: Request, res: Response) => {
   try {
@@ -223,19 +224,57 @@ export const getMyHistory = async (req: Request, res: Response) => {
 // POST /api/work-records
 export const logHours = async (req: Request, res: Response) => {
   try {
-    const { assignmentId, roomId, hours } = req.body;
+    const { assignmentId, roomName, hours } = req.body;
 
-    if (!assignmentId || !roomId || hours === undefined) {
-      return res.status(400).json({ error: 'Faltan campos requeridos (assignmentId, roomId, hours)' });
+    if (!assignmentId || !roomName || hours === undefined) {
+      return res.status(400).json({ error: 'Faltan campos requeridos (assignmentId, roomName, hours)' });
     }
 
+    // 1. Obtener la asignación para verificar la dirección y la fecha
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: { address: true }
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ error: 'Asignación no encontrada' });
+    }
+
+    // 2. Buscar o crear la habitación (Room) para esa dirección
+    // Primero, verificamos si ya existe una habitación con ese nombre para esa dirección
+    let room = await prisma.room.findFirst({
+      where: {
+        addressId: assignment.addressId,
+        name: { equals: roomName, mode: 'insensitive' }
+      }
+    });
+
+    // Si no existe, la creamos
+    if (!room) {
+      room = await prisma.room.create({
+        data: {
+          name: roomName,
+          addressId: assignment.addressId
+        }
+      });
+    }
+
+    // 3. Calcular si el reporte es tardío
+    // Es tardío si se reporta después de las 23:59 del día de la asignación
+    const isLate = isAfter(new Date(), endOfDay(assignment.date));
+
+    // 4. Crear el WorkRecord
     const workRecord = await prisma.workRecord.create({
       data: {
         assignmentId,
-        roomId,
-        hours,
+        roomId: room.id,
+        hours: Number(hours),
         isVerified: false,
+        isLate,
       },
+      include: {
+        room: true
+      }
     });
 
     res.status(201).json({ message: 'Horas cargadas exitosamente', workRecord });

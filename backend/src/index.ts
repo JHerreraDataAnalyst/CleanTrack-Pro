@@ -7,6 +7,7 @@ import workerRoutes from './routes/workerRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendar.routes';
+import { initCronJobs } from './cron/lateReportAlerts';
 
 dotenv.config();
 
@@ -15,6 +16,9 @@ const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+// Inicializar tareas programadas (CRON)
+initCronJobs();
 
 // Routes
 app.use('/api/auth', authRoutes);

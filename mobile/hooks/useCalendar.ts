@@ -36,6 +36,7 @@ export const useCalendar = () => {
   const { user, token } = useAuth();
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [showPendingOnly, setShowPendingOnly] = useState(false);
 
   // Definir rango de búsqueda dinámico basado en un rango amplio (ej: -6 a +6 meses)
   // para permitir navegar al pasado fluidamente sin cargar toda la base de datos de golpe.
@@ -99,11 +100,27 @@ export const useCalendar = () => {
   const agendaItems = useMemo(() => {
     if (!data) return {};
     const items: any = {};
+    const today = startOfMonth(new Date()); // O startOfDay, pero para pendientes pasados
+    
     data.forEach((day) => {
-      items[day.date] = day.assignments;
+      let dayAssignments = day.assignments;
+      
+      if (showPendingOnly && user?.role === 'ADMIN') {
+        const dateObj = new Date(day.date);
+        const isPast = isBefore(dateObj, startOfDay(new Date()));
+        if (isPast) {
+           dayAssignments = dayAssignments.filter(a => a.totalHours === 0);
+        } else {
+           dayAssignments = []; // No mostramos futuras/hoy en pendientes
+        }
+      }
+      
+      if (dayAssignments.length > 0 || !showPendingOnly) {
+        items[day.date] = dayAssignments;
+      }
     });
     return items;
-  }, [data]);
+  }, [data, showPendingOnly, user]);
 
   // Ya no hay restricciones de minDate para ningún rol (Trabajador puede ver historial)
 
@@ -113,6 +130,8 @@ export const useCalendar = () => {
     setViewMode,
     selectedDate,
     setSelectedDate,
+    showPendingOnly,
+    setShowPendingOnly,
     data,
     isLoading,
     error,

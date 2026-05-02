@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import React, { Suspense } from "react";
 import type { ReactNode } from "react";
 import { Globe } from "lucide-react";
 import { headers } from "next/headers";
@@ -151,6 +151,7 @@ async function StatsSection({ role }: { role: Role }) {
     trend: s.hint,
   }));
   return <StatsCards stats={cards} />;
+}
 
 async function WeeklyActivitySection({ role }: { role: Role }) {
   const data = await getWeeklyDataByRole(role);
@@ -184,10 +185,11 @@ async function UpcomingSection({ role }: { role: Role }) {
       "pending" | "in_progress" | "completed",
   }));
   return <UpcomingTasks tasks={tasks} />;
+}
 
-async function SafeSection({ children }: { children: Promise<ReactNode> }) {
+async function safeRender(renderFn: () => Promise<React.JSX.Element>): Promise<React.JSX.Element> {
   try {
-    return await children;
+    return await renderFn();
   } catch (error) {
     return (
       <Card>
@@ -243,15 +245,15 @@ export default async function DashboardPage() {
       </section>
 
       <Suspense fallback={<StatsFallback />}>
-        <SafeSection>{StatsSection({ role: user.role })}</SafeSection>
+        {await safeRender(() => StatsSection({ role: user.role }))}
       </Suspense>
 
       <section className="grid gap-6 xl:grid-cols-[2fr_1fr]">
         <Suspense fallback={<SectionSkeleton height="h-[300px]" />}>
-          <SafeSection>{WeeklyActivitySection({ role: user.role })}</SafeSection>
+          {await safeRender(() => WeeklyActivitySection({ role: user.role }))}
         </Suspense>
         <Suspense fallback={<SectionSkeleton height="h-[300px]" />}>
-          <SafeSection>{UpcomingSection({ role: user.role })}</SafeSection>
+          {await safeRender(() => UpcomingSection({ role: user.role }))}
         </Suspense>
       </section>
     </div>

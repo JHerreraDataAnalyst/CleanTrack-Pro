@@ -13,21 +13,23 @@ LocaleConfig.locales['es'] = {
 };
 LocaleConfig.defaultLocale = 'es';
 
-export default function DailyAssignmentsScreen() {
+// ─── Inner component: ALL hooks live here, only rendered for TRABAJADOR users ──
+// Isolating hooks ensures React hook count is always consistent, satisfying
+// React Rules of Hooks and avoiding issues with the React Compiler.
+function DailyAssignmentsInner({ user }: { user: any }) {
   const [viewMode, setViewMode] = useState<'tareas' | 'acumulado'>('tareas');
-  
+
   // Estado para Tareas
   const [selectedAssignment, setSelectedAssignment] = useState<string | null>(null);
   const [hours, setHours] = useState('');
   const [assignments, setAssignments] = useState<any[]>([]);
   const [selectedDay, setSelectedDay] = useState<'hoy' | 'mañana'>('hoy');
-  
+
   // Estado para Acumulado
   const [historyData, setHistoryData] = useState<{ totalHours: number, estimatedPay: number, records: any[] } | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  
+
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
 
   const API_URL = 'http://192.168.1.137:3000/api/work-records';
 
@@ -40,7 +42,6 @@ export default function DailyAssignmentsScreen() {
         targetDate.setDate(targetDate.getDate() + 1);
       }
       const dateString = targetDate.toISOString().split('T')[0];
-      
       const response = await fetch(`${API_URL}?date=${dateString}&workerId=${user.id}`);
       const data = await response.json();
       setAssignments(data);
@@ -90,20 +91,28 @@ export default function DailyAssignmentsScreen() {
 
   return (
     <View className="flex-1 bg-brand-light">
-      {/* Top Toggle */}
+      {/* Top Toggle — pure ternary, never an empty-string branch */}
       <View className="pt-12 pb-4 px-4 bg-white shadow-sm z-10 border-b border-gray-100">
         <View className="flex-row bg-gray-100 rounded-xl p-1">
-          <TouchableOpacity 
-            className={`flex-1 py-3 items-center rounded-lg ${viewMode === 'tareas' ? 'bg-white shadow-sm' : ''}`}
+          <TouchableOpacity
+            className={viewMode === 'tareas'
+              ? 'flex-1 py-3 items-center rounded-lg bg-white shadow-sm'
+              : 'flex-1 py-3 items-center rounded-lg'}
             onPress={() => setViewMode('tareas')}
           >
-            <Text className={`font-bold ${viewMode === 'tareas' ? 'text-brand-primary' : 'text-gray-500'}`}>Tareas de Hoy</Text>
+            <Text className={viewMode === 'tareas' ? 'font-bold text-brand-primary' : 'font-bold text-gray-500'}>
+              Tareas de Hoy
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            className={`flex-1 py-3 items-center rounded-lg ${viewMode === 'acumulado' ? 'bg-brand-primary shadow-sm' : ''}`}
+          <TouchableOpacity
+            className={viewMode === 'acumulado'
+              ? 'flex-1 py-3 items-center rounded-lg bg-brand-primary shadow-sm'
+              : 'flex-1 py-3 items-center rounded-lg'}
             onPress={() => setViewMode('acumulado')}
           >
-            <Text className={`font-bold ${viewMode === 'acumulado' ? 'text-white' : 'text-gray-500'}`}>Mi Acumulado</Text>
+            <Text className={viewMode === 'acumulado' ? 'font-bold text-white' : 'font-bold text-gray-500'}>
+              Mi Acumulado
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -112,19 +121,27 @@ export default function DailyAssignmentsScreen() {
         {viewMode === 'tareas' && (
           <>
             <View className="mb-6">
-              {/* Selector de Días interno para las tareas */}
+              {/* Selector de Días */}
               <View className="flex-row gap-3">
-                <TouchableOpacity 
-                  className={`px-4 py-2 rounded-full border ${selectedDay === 'hoy' ? 'bg-brand-primary border-brand-primary' : 'bg-white border-gray-200'}`}
+                <TouchableOpacity
+                  className={selectedDay === 'hoy'
+                    ? 'px-4 py-2 rounded-full border bg-brand-primary border-brand-primary'
+                    : 'px-4 py-2 rounded-full border bg-white border-gray-200'}
                   onPress={() => setSelectedDay('hoy')}
                 >
-                  <Text className={`font-semibold ${selectedDay === 'hoy' ? 'text-white' : 'text-brand-dark'}`}>Hoy</Text>
+                  <Text className={selectedDay === 'hoy' ? 'font-semibold text-white' : 'font-semibold text-brand-dark'}>
+                    Hoy
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  className={`px-4 py-2 rounded-full border ${selectedDay === 'mañana' ? 'bg-brand-primary border-brand-primary' : 'bg-white border-gray-200'}`}
+                <TouchableOpacity
+                  className={selectedDay === 'mañana'
+                    ? 'px-4 py-2 rounded-full border bg-brand-primary border-brand-primary'
+                    : 'px-4 py-2 rounded-full border bg-white border-gray-200'}
                   onPress={() => setSelectedDay('mañana')}
                 >
-                  <Text className={`font-semibold ${selectedDay === 'mañana' ? 'text-white' : 'text-brand-dark'}`}>Mañana</Text>
+                  <Text className={selectedDay === 'mañana' ? 'font-semibold text-white' : 'font-semibold text-brand-dark'}>
+                    Mañana
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -154,13 +171,13 @@ export default function DailyAssignmentsScreen() {
                         onChangeText={setHours}
                       />
                       <View className="flex-row gap-3">
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           className="flex-1 bg-gray-200 p-3 rounded-lg items-center"
                           onPress={() => setSelectedAssignment(null)}
                         >
                           <Text className="text-gray-700 font-semibold">Cancelar</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           className="flex-1 bg-brand-success p-3 rounded-lg items-center shadow-sm"
                           onPress={() => handleConfirm(task.id)}
                         >
@@ -177,7 +194,7 @@ export default function DailyAssignmentsScreen() {
                       <Text className="text-yellow-700 font-bold text-base">⏳ Pendiente de confirmación ({task.hours}h)</Text>
                     </View>
                   ) : (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       className="mt-4 bg-brand-primary p-3 rounded-lg items-center shadow-sm"
                       onPress={() => {
                         setSelectedAssignment(task.id);
@@ -242,14 +259,22 @@ export default function DailyAssignmentsScreen() {
                       historyData.records
                         .filter(r => new Date(r.date).toISOString().split('T')[0] === selectedDate)
                         .map((record, index) => (
-                          <View key={record.id} className={`flex-row justify-between items-center ${index > 0 ? 'border-t border-gray-100 mt-3 pt-3' : ''}`}>
+                          // Use style prop for conditional separator — NEVER empty-string className
+                          <View
+                            key={record.id}
+                            className="flex-row justify-between items-center"
+                            style={index > 0 ? { borderTopWidth: 1, borderTopColor: '#F3F4F6', marginTop: 12, paddingTop: 12 } : undefined}
+                          >
                             <View>
                               <Text className="font-bold text-brand-dark">{record.address}</Text>
                               <Text className="text-gray-500 mt-1">Habitación: {record.room}</Text>
                             </View>
                             <View className="items-end">
-                              <View className={`px-3 py-1 rounded-full border ${record.isVerified ? 'bg-green-50 border-green-100' : 'bg-yellow-50 border-yellow-100'}`}>
-                                <Text className={`font-bold ${record.isVerified ? 'text-green-700' : 'text-yellow-700'}`}>
+                              <View className={record.isVerified
+                                ? 'px-3 py-1 rounded-full border bg-green-50 border-green-100'
+                                : 'px-3 py-1 rounded-full border bg-yellow-50 border-yellow-100'}
+                              >
+                                <Text className={record.isVerified ? 'font-bold text-green-700' : 'font-bold text-yellow-700'}>
                                   {record.hours}h {record.isVerified ? '✅' : '⏳'}
                                 </Text>
                               </View>
@@ -269,4 +294,12 @@ export default function DailyAssignmentsScreen() {
       </ScrollView>
     </View>
   );
+}
+
+// ─── Outer shell: role guard BEFORE any hooks ──────────────────────────────────
+// This ensures hook count is always stable regardless of user.role.
+export default function DailyAssignmentsScreen() {
+  const { user } = useAuth();
+  if (!user || user.role !== 'TRABAJADOR') return null;
+  return <DailyAssignmentsInner user={user} />;
 }

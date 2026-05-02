@@ -68,6 +68,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
+        lazy: true,
         tabBarActiveTintColor: '#0066FF',
         headerShown: true,
         headerRight: () => <HeaderRightControls userId={user.id} logout={logout} />,

@@ -27,12 +27,16 @@ const AGENDA_THEME = {
   agendaTodayColor: '#0066FF',
   agendaKnobColor: '#0066FF',
   backgroundColor: '#F3F4F6',
-  calendarBackground: '#ffffff',
+  calendarBackground: '#ffffff'
 };
 
-export default function AdminDashboardScreen() {
+// ─── Inner component: all hooks live here, rendered only for ADMIN users ───────
+// Separating hooks into an inner component ensures that:
+// 1. React Hooks Rules are never violated (no hooks after conditional return)
+// 2. The React Compiler can optimize hooks calls safely
+// 3. react-native-css-interop never encounters an inconsistent hook count
+function AdminDashboardInner({ logout }: { logout: () => void }) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'planner' | 'reports'>('dashboard');
-  const { logout } = useAuth();
 
   // DASHBOARD STATE
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -407,23 +411,23 @@ export default function AdminDashboardScreen() {
 
         {/* TOGGLE */}
         <View className="flex-row bg-gray-200 rounded-xl p-1 mb-2">
-          <TouchableOpacity 
-            className={`flex-1 py-2 rounded-lg items-center ${activeTab === 'dashboard' ? 'bg-white shadow-sm' : ''}`}
+          <TouchableOpacity
+            className={activeTab === 'dashboard' ? 'flex-1 py-2 rounded-lg items-center bg-white shadow-sm' : 'flex-1 py-2 rounded-lg items-center'}
             onPress={() => setActiveTab('dashboard')}
           >
-            <Text className={`font-bold ${activeTab === 'dashboard' ? 'text-brand-primary' : 'text-gray-500'}`}>Dashboard</Text>
+            <Text className={activeTab === 'dashboard' ? 'font-bold text-brand-primary' : 'font-bold text-gray-500'}>Dashboard</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            className={`flex-1 py-2 rounded-lg items-center ${activeTab === 'planner' ? 'bg-white shadow-sm' : ''}`}
+          <TouchableOpacity
+            className={activeTab === 'planner' ? 'flex-1 py-2 rounded-lg items-center bg-white shadow-sm' : 'flex-1 py-2 rounded-lg items-center'}
             onPress={() => setActiveTab('planner')}
           >
-            <Text className={`font-bold ${activeTab === 'planner' ? 'text-brand-primary' : 'text-gray-500'}`}>Agenda</Text>
+            <Text className={activeTab === 'planner' ? 'font-bold text-brand-primary' : 'font-bold text-gray-500'}>Agenda</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            className={`flex-1 py-2 rounded-lg items-center ${activeTab === 'reports' ? 'bg-white shadow-sm' : ''}`}
+          <TouchableOpacity
+            className={activeTab === 'reports' ? 'flex-1 py-2 rounded-lg items-center bg-white shadow-sm' : 'flex-1 py-2 rounded-lg items-center'}
             onPress={() => setActiveTab('reports')}
           >
-            <Text className={`font-bold ${activeTab === 'reports' ? 'text-brand-primary' : 'text-gray-500'}`}>Reportes</Text>
+            <Text className={activeTab === 'reports' ? 'font-bold text-brand-primary' : 'font-bold text-gray-500'}>Reportes</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -861,7 +865,7 @@ export default function AdminDashboardScreen() {
                     setIsFilterModalVisible(false);
                   }}
                 >
-                  <Text className={`font-bold ${selectedEmployee === emp.id ? 'text-brand-primary' : 'text-gray-700'}`}>{emp.name}</Text>
+                  <Text className={selectedEmployee === emp.id ? 'font-bold text-brand-primary' : 'font-bold text-gray-700'}>{emp.name}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -870,4 +874,13 @@ export default function AdminDashboardScreen() {
       </Modal>
     </View>
   );
+}
+
+// ─── Outer shell: role guard before ANY hooks ──────────────────────────────
+export default function AdminDashboardScreen() {
+  const { user, logout } = useAuth();
+  // Only render the inner component (with all its hooks) for ADMIN users.
+  // This satisfies React's Rules of Hooks: hook count never changes between renders.
+  if (!user || user.role !== 'ADMIN') return null;
+  return <AdminDashboardInner logout={logout} />;
 }

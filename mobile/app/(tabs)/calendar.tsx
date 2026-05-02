@@ -359,14 +359,14 @@ export default function CalendarScreen() {
             <TouchableOpacity
               key={mode}
               onPress={() => setViewMode(mode)}
-              className={`flex-1 py-2 items-center rounded-lg ${
-                viewMode === mode ? 'bg-white shadow-sm' : ''
-              }`}
+              className={viewMode === mode
+                ? 'flex-1 py-2 items-center rounded-lg bg-white shadow-sm'
+                : 'flex-1 py-2 items-center rounded-lg'}
             >
               <Text
-                className={`font-bold capitalize ${
-                  viewMode === mode ? 'text-brand-primary' : 'text-gray-500'
-                }`}
+                className={viewMode === mode
+                  ? 'font-bold capitalize text-brand-primary'
+                  : 'font-bold capitalize text-gray-500'}
               >
                 {mode === 'day' ? 'Día' : mode === 'week' ? 'Semana' : 'Mes'}
               </Text>

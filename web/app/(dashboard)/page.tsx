@@ -54,8 +54,8 @@ type TodayTasksResponse = Array<{
   status?: "pending" | "confirmed" | "in_progress";
 }>;
 
-function getBaseUrl() {
-  const h = headers();
+async function getBaseUrl() {
+  const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host");
   const protocol = h.get("x-forwarded-proto") ?? "http";
   if (!host) throw new Error("No se pudo resolver host para llamadas internas");
@@ -63,7 +63,7 @@ function getBaseUrl() {
 }
 
 async function fetchAppApi<T>(path: string): Promise<T> {
-  const baseUrl = getBaseUrl();
+  const baseUrl = await getBaseUrl();
   const response = await fetch(`${baseUrl}${path}`, { cache: "no-store" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { message?: string } | null;

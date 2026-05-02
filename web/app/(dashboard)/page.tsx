@@ -1,13 +1,15 @@
 import { Suspense } from "react";
 import type { ReactNode } from "react";
-import { CalendarClock, CheckCircle2, ClipboardList, Clock3, Globe, MapPinned } from "lucide-react";
 import { headers } from "next/headers";
 import { WeeklyBarChart } from "@/components/dashboard/weekly-bar-chart";
+import { StatsCards } from "@/components/dashboard/stats-cards";
+import { UpcomingTasks } from "@/components/dashboard/upcoming-tasks";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireAuth } from "@/lib/auth";
 import type { Role } from "@/types/auth";
+import type { StatCardItem, Task } from "@/types/dashboard";
 
 interface StatItem {
   title: string;
@@ -28,8 +30,6 @@ interface UpcomingItem {
   type: "task" | "reservation";
   status: "pending" | "confirmed" | "in_progress";
 }
-
-const ICON_BY_INDEX = [MapPinned, ClipboardList, CheckCircle2, Clock3];
 
 type StatsResponse = Partial<{
   assignedSites: number;
@@ -144,25 +144,15 @@ function SectionSkeleton({ height = "h-[300px]" }: { height?: string }) {
 
 async function StatsSection({ role }: { role: Role }) {
   const stats = await getStatsByRole(role);
-  return (
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {stats.map((stat, index) => {
-        const Icon = ICON_BY_INDEX[index % ICON_BY_INDEX.length];
-        return (
-          <Card key={stat.title} className="border-primary/20">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
-              <Icon className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold tracking-tight">{stat.value.toLocaleString("es-ES")}</div>
-              <p className="mt-1 text-xs text-muted-foreground">{stat.hint}</p>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </section>
-  );
+  
+  // Map internal StatItem[] to StatCardItem[] expected by StatsCards
+  const cardItems: StatCardItem[] = stats.map((s) => ({
+    label: s.title,
+    value: s.value,
+    trend: s.hint,
+  }));
+
+  return <StatsCards stats={cardItems} />;
 }
 
 async function WeeklyActivitySection({ role }: { role: Role }) {
@@ -185,33 +175,19 @@ async function WeeklyActivitySection({ role }: { role: Role }) {
 async function UpcomingSection({ role }: { role: Role }) {
   const items = await getUpcomingByRole(role);
 
-  return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CalendarClock className="h-5 w-5 text-primary" />
-          Proximas tareas / reservas
-        </CardTitle>
-        <CardDescription>Agenda operativa de las siguientes horas</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {items.length === 0 && <p className="text-sm text-muted-foreground">No hay tareas o reservas para mostrar.</p>}
-        {items.map((item) => (
-          <article key={item.id} className="rounded-lg border border-border/80 bg-card/80 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-medium">{item.title}</h3>
-              <Badge variant={item.status === "pending" ? "outline" : "secondary"}>{item.status.replace("_", " ")}</Badge>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">{item.site}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{new Date(item.startAt).toLocaleString("es-ES")}</p>
-            <Badge variant="default" className="mt-2">
-              {item.type === "reservation" ? "Reserva" : "Tarea"}
-            </Badge>
-          </article>
-        ))}
-      </CardContent>
-    </Card>
-  );
+  // Map internal UpcomingItem[] to Task[] expected by UpcomingTasks
+  const tasks: Task[] = items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    siteName: item.site,
+    dueAt: item.startAt,
+    status:
+      item.status === "confirmed"
+        ? "pending"
+        : (item.status as "pending" | "in_progress" | "completed"),
+  }));
+
+  return <UpcomingTasks tasks={tasks} />;
 }
 
 async function SafeSection({ children }: { children: Promise<ReactNode> }) {

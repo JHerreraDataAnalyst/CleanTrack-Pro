@@ -16,15 +16,14 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { getAdminEmployees, getAdminAddresses, createAdminAssignment } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Types & schema
 // ---------------------------------------------------------------------------
-interface Site { id: string; name: string; address: string; }
-interface Worker { id: string; name: string; email: string; }
-
+// Field is named "addressId" to match the backend payload exactly.
 const schema = z.object({
-  siteId: z.string().min(1, "Selecciona una sede"),
+  addressId: z.string().min(1, "Selecciona una sede"),
   workerId: z.string().min(1, "Asigna un trabajador"),
   date: z.string().min(1, "Indica la fecha"),
   time: z.string().min(1, "Indica la hora"),
@@ -32,18 +31,6 @@ const schema = z.object({
 });
 
 type TaskValues = z.infer<typeof schema>;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-async function http<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const d = await res.json().catch(() => null);
-    throw new Error((d as { message?: string } | null)?.message ?? "Error de servidor");
-  }
-  return res.json() as Promise<T>;
-}
 
 // ---------------------------------------------------------------------------
 // Field wrappers
@@ -138,35 +125,30 @@ export function CreateTaskSheet({ children }: { children?: React.ReactNode }) {
     formState: { errors },
   } = useForm<TaskValues>({
     resolver: zodResolver(schema),
-    defaultValues: { siteId: "", workerId: "", date: "", time: "", notes: "" },
+    defaultValues: { addressId: "", workerId: "", date: "", time: "", notes: "" },
   });
 
-  // Fetch sites & workers
-  const sitesQ = useQuery<Site[]>({
+  // Fetch sites (addresses) & workers from real backend
+  const sitesQ = useQuery({
     queryKey: ["admin-sites"],
-    queryFn: () => http<Site[]>("/api/admin/sites"),
+    queryFn: getAdminAddresses,
     enabled: open,
     staleTime: 30_000,
   });
 
-  const workersQ = useQuery<Worker[]>({
+  const workersQ = useQuery({
     queryKey: ["admin-workers"],
-    queryFn: () => http<Worker[]>("/api/admin/workers"),
+    queryFn: getAdminEmployees,
     enabled: open,
     staleTime: 30_000,
   });
 
   const createMutation = useMutation({
     mutationFn: (values: TaskValues) =>
-      http<{ id: string }>("/api/admin/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          siteId: values.siteId,
-          workerId: values.workerId,
-          scheduledAt: `${values.date}T${values.time}:00`,
-          notes: values.notes ?? "",
-        }),
+      createAdminAssignment({
+        workerId: values.workerId,
+        addressId: values.addressId,
+        date: values.date, // "yyyy-MM-dd"
       }),
     onSuccess: async () => {
       toast.success("Tarea creada y asignada correctamente");
@@ -179,8 +161,11 @@ export function CreateTaskSheet({ children }: { children?: React.ReactNode }) {
     onError: (err) => toast.error("No se pudo crear la tarea", err.message),
   });
 
+  // Map to SearchableOption shape
   const siteOptions: SearchableOption[] = (sitesQ.data ?? []).map((s) => ({
-    id: s.id, label: s.name, sub: s.address,
+    id: s.id,
+    label: s.street,      // Address.street from backend
+    sub: s.city,          // Address.city from backend
   }));
   const workerOptions: SearchableOption[] = (workersQ.data ?? []).map((w) => ({
     id: w.id, label: w.name, sub: w.email,
@@ -220,7 +205,7 @@ export function CreateTaskSheet({ children }: { children?: React.ReactNode }) {
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col gap-6">
           {/* Sede */}
           <div className="space-y-2">
-            <FieldLabel htmlFor="siteId">
+            <FieldLabel htmlFor="addressId">
               <span className="inline-flex items-center gap-1.5">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">1</span>
                 Sede
@@ -230,11 +215,11 @@ export function CreateTaskSheet({ children }: { children?: React.ReactNode }) {
               <div className="h-10 animate-pulse rounded-md bg-muted" />
             ) : (
               <Controller
-                name="siteId"
+                name="addressId"
                 control={control}
                 render={({ field }) => (
                   <SearchableSelect
-                    id="siteId"
+                    id="addressId"
                     options={siteOptions}
                     value={field.value}
                     onChange={field.onChange}
@@ -244,7 +229,7 @@ export function CreateTaskSheet({ children }: { children?: React.ReactNode }) {
                 )}
               />
             )}
-            <FieldError msg={errors.siteId?.message} />
+            <FieldError msg={errors.addressId?.message} />
           </div>
 
           {/* Trabajador */}

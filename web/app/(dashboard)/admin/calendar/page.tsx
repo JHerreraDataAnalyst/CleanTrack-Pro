@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateTaskSheet } from "@/components/admin/create-task-sheet";
+import { getAdminAssignments, type Assignment } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,24 +28,24 @@ interface CalendarTask {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-async function http<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    const d = await res.json().catch(() => null);
-    throw new Error((d as { message?: string } | null)?.message ?? "Error");
-  }
-  return res.json() as Promise<T>;
+
+/** Map backend Assignment status to the lowercase variant used in the UI */
+function mapStatus(s: Assignment["status"]): CalendarTask["status"] {
+  if (s === "COMPLETED") return "completed";
+  if (s === "IN_PROGRESS") return "in_progress";
+  return "pending";
 }
 
-const MOCK_TASKS: CalendarTask[] = [
-  { id: "1", title: "Limpieza planta baja", siteName: "Oficinas Centro", workerName: "María García", scheduledAt: new Date(Date.now()).toISOString(), status: "pending" },
-  { id: "2", title: "Desinfección salas", siteName: "Torre Empresarial A", workerName: "Carlos López", scheduledAt: new Date(Date.now()).toISOString(), status: "in_progress" },
-  { id: "3", title: "Mantenimiento cristales", siteName: "Edificio Norte", workerName: "Ana Martínez", scheduledAt: new Date(Date.now() + 86400000).toISOString(), status: "pending" },
-  { id: "4", title: "Limpieza baños", siteName: "Oficinas Centro", workerName: "Juan Pérez", scheduledAt: new Date(Date.now() + 86400000 * 2).toISOString(), status: "pending" },
-  { id: "5", title: "Limpieza zona exterior", siteName: "Torre Empresarial A", workerName: "María García", scheduledAt: new Date(Date.now() + 86400000 * 4).toISOString(), status: "pending" },
-  { id: "6", title: "Desinfección oficinas", siteName: "Edificio Norte", workerName: "Carlos López", scheduledAt: new Date(Date.now() - 86400000).toISOString(), status: "completed" },
-  { id: "7", title: "Limpieza cocina", siteName: "Oficinas Centro", workerName: "Ana Martínez", scheduledAt: new Date(Date.now() - 86400000 * 2).toISOString(), status: "completed" },
-];
+function assignmentToCalendarTask(a: Assignment): CalendarTask {
+  return {
+    id: a.id,
+    title: `Limpieza en ${a.address.street}`,
+    siteName: a.address.city || a.address.street,
+    workerName: a.worker?.name ?? "Sin asignar",
+    scheduledAt: a.date,
+    status: mapStatus(a.status),
+  };
+}
 
 const STATUS_CFG = {
   pending: { label: "Pendiente", color: "bg-amber-500", badge: "outline" as const },
@@ -215,16 +216,18 @@ export default function AdminCalendarPage() {
   const tasksQ = useQuery<CalendarTask[]>({
     queryKey: ["calendar-tasks", year, month],
     queryFn: async () => {
-      try {
-        return await http<CalendarTask[]>(`/api/admin/tasks?year=${year}&month=${month + 1}`);
-      } catch {
-        return MOCK_TASKS;
-      }
+      // Build date range for the full month
+      const startDate = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const endDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const assignments = await getAdminAssignments({ startDate, endDate });
+      return assignments.map(assignmentToCalendarTask);
     },
     staleTime: 60_000,
   });
 
-  const tasks = tasksQ.data ?? MOCK_TASKS;
+  const tasks = tasksQ.data ?? [];
+
 
   // Group by date string
   const tasksByDate = useMemo(() => {

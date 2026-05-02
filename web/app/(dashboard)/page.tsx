@@ -1,15 +1,15 @@
 import { Suspense } from "react";
 import type { ReactNode } from "react";
+import { Globe } from "lucide-react";
 import { headers } from "next/headers";
-import { WeeklyBarChart } from "@/components/dashboard/weekly-bar-chart";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { UpcomingTasks } from "@/components/dashboard/upcoming-tasks";
+import { WeeklyBarChart } from "@/components/dashboard/weekly-bar-chart";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireAuth } from "@/lib/auth";
 import type { Role } from "@/types/auth";
-import type { StatCardItem, Task } from "@/types/dashboard";
 
 interface StatItem {
   title: string;
@@ -144,24 +144,23 @@ function SectionSkeleton({ height = "h-[300px]" }: { height?: string }) {
 
 async function StatsSection({ role }: { role: Role }) {
   const stats = await getStatsByRole(role);
-  
-  // Map internal StatItem[] to StatCardItem[] expected by StatsCards
-  const cardItems: StatCardItem[] = stats.map((s) => ({
+  // Map to the shape StatsCards expects: { label, value, trend }
+  const cards = stats.map((s) => ({
     label: s.title,
     value: s.value,
     trend: s.hint,
   }));
-
-  return <StatsCards stats={cardItems} />;
-}
+  return <StatsCards stats={cards} />;
 
 async function WeeklyActivitySection({ role }: { role: Role }) {
   const data = await getWeeklyDataByRole(role);
   return (
-    <Card className="h-full">
+    <Card className="h-full shadow-md border-border/50">
       <CardHeader>
         <CardTitle>Actividad semanal</CardTitle>
-        <CardDescription>{role === "admin" ? "Volumen global por sedes" : "Tu actividad por dia"}</CardDescription>
+        <CardDescription>
+          {role === "admin" ? "Volumen global por sedes" : "Tu actividad por dia"}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-[300px] w-full">
@@ -174,21 +173,17 @@ async function WeeklyActivitySection({ role }: { role: Role }) {
 
 async function UpcomingSection({ role }: { role: Role }) {
   const items = await getUpcomingByRole(role);
-
-  // Map internal UpcomingItem[] to Task[] expected by UpcomingTasks
-  const tasks: Task[] = items.map((item) => ({
+  // Map UpcomingItem → Task shape expected by <UpcomingTasks />
+  const tasks = items.map((item) => ({
     id: item.id,
     title: item.title,
     siteName: item.site,
     dueAt: item.startAt,
-    status:
-      item.status === "confirmed"
-        ? "pending"
-        : (item.status as "pending" | "in_progress" | "completed"),
+    // 'confirmed' is not in the Task union — treat it as in_progress
+    status: (item.status === "confirmed" ? "in_progress" : item.status) as
+      "pending" | "in_progress" | "completed",
   }));
-
   return <UpcomingTasks tasks={tasks} />;
-}
 
 async function SafeSection({ children }: { children: Promise<ReactNode> }) {
   try {
